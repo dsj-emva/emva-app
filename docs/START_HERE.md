@@ -10,7 +10,7 @@ section 4). States: not started, in progress, waiting for approval, done.
 
 | phase | what | state | pull request | report | date |
 |---|---|---|---|---|---|
-| 0 | Set-up of both repositories | in progress | | | |
+| 0 | Set-up of both repositories | waiting for approval | emva-app [#2](https://github.com/dsj-emva/emva-app/pull/2), [#3](https://github.com/dsj-emva/emva-app/pull/3); emva-sim [#2](https://github.com/dsj-emva/emva-sim/pull/2) | [phase-0.md](phases/phase-0.md) | 2026-10-01 |
 | 1 | First thin slice: upload, format, train, results, score one lead | not started | | | |
 | S | Planned-hospitality profile and generator (runs alongside 1 to 3) | not started | | | |
 | 2 | Deeper model | not started | | | |
