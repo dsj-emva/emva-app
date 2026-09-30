@@ -3,7 +3,7 @@ from typing import Literal
 from fastapi import FastAPI
 from pydantic import BaseModel
 
-app = FastAPI(title="EMVA API")
+app = FastAPI(title="Emva API")
 
 
 class Health(BaseModel):

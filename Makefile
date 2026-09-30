@@ -25,6 +25,7 @@ generate-client:
 # Fails when the committed client differs from what the service's schema generates.
 check-client: generate-client
 	git diff --exit-code -- $(CLIENT)
+	test -z "$$(git status --porcelain -- $(CLIENT))"
 
 dev:
 	docker compose up -d
