@@ -2,7 +2,7 @@
 
 - Status: amended by ADR 0012 (each stage event carries the lead's full score at that moment)
 
-EMVA sends the platforms a lead score on a fixed, stable scale. The platforms' conversion value and currency
+Emva sends the platforms a lead score on a fixed, stable scale. The platforms' conversion value and currency
 fields carry it because they require them; the platforms will display and optimise it as money (return on ad
 spend = score / spend), so its scale must not drift between retrains, and revenue reporting always uses recorded
 deal values, never scores.
