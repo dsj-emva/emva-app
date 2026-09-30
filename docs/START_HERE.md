@@ -3,10 +3,27 @@
 This file is the build plan and the prompts that start each phase. It was written at the end of the planning
 session of 2026-09-30. The rulings behind it are in `CONTEXT.md` (the word list) and `docs/adr/` (the decisions).
 
+## Progress
+
+Every session reads this table first. Only the user moves a phase to "done" (see "Moving to the next phase" in
+section 4). States: not started, in progress, waiting for approval, done.
+
+| phase | what | state | pull request | report | date |
+|---|---|---|---|---|---|
+| 0 | Set-up of both repositories | in progress | | | |
+| 1 | First thin slice: upload, format, train, results, score one lead | not started | | | |
+| S | Planned-hospitality profile and generator (runs alongside 1 to 3) | not started | | | |
+| 2 | Deeper model | not started | | | |
+| 3 | The AI jobs | not started | | | |
+| 4 | Live intake and the lead simulator (needs 1 and S done) | not started | | | |
+| 5 | Real data: public, then a pilot business | not started | | | |
+| 6 | Live connection to the ad platforms | not started | | | |
+
 ## 1. What to read, and in what order
 
 Every working session, in either repository, starts by reading, in this order:
 
+0. The Progress table at the top of this file: which phase is current and what is waiting for approval.
 1. `CLAUDE.md` of the repository you are in (how to work there).
 2. `emva-app/CONTEXT.md`: the word list. Use its words exactly, in code, tests, screens and messages. If a word
    you need is missing, or you want to use a word the list says to avoid, stop and ask.
@@ -99,6 +116,30 @@ Two repositories under `~/code/emva/`:
 Phase 0 comes first. After it, the product track (phases 1 to 3) and the simulator track (phase S) run in
 parallel, in separate sessions. They meet in phase 4.
 
+### Tracking progress inside a phase
+
+- `/to-issues` puts each phase's issues on GitHub under one milestone per phase ("Phase 1", "Phase S", ...), in
+  the repository that does the work. How many are open or closed is the phase's progress; a session checks it with
+  `gh issue list --milestone "<phase>"` before choosing what to do next.
+- Each issue is one branch and one pull request, linked to its issue, closed when the user merges it.
+- When a session starts a phase, it sets the phase to "in progress" in the Progress table.
+
+### Moving to the next phase
+
+A phase is finished only when every check in its "Done when" list passes. At the end of a phase the session:
+
+1. Runs every "Done when" check and records each result (the command or screen, and what it showed).
+2. Runs `/code-review` over the whole phase.
+3. Writes a one-page phase report at `docs/phases/phase-<N>.md` in the repository that did the work: what was
+   built, each check and its result, what is still open, and any new decisions or words added.
+4. Sets the phase to "waiting for approval" in the Progress table, with the pull request and report links, and
+   tells the user.
+5. Stops. It does not start the next phase until the user approves. The user then sets the phase to "done", or
+   says what to fix, and the session fixes it and repeats from step 1.
+
+A failed check is reported as failed, never worked around. Phase 4 cannot start until phases 1 and S are both done.
+Each phase's "Done when" list is fixed before the phase starts; changing it needs the user's approval.
+
 ### Phase 0: set-up (one session, in `~/code/emva`)
 
 Goal: two empty but working repositories, with the rules written down where every later session will find them.
@@ -118,17 +159,26 @@ Prompt:
 > (a compose file).
 >
 > In `emva-sim`: `git init`; a `CLAUDE.md` saying it builds industry profiles, the generator and the lead
-> simulator, follows the skills and helper agents rules in section 3 of START_HERE, uses the vocabulary of `../emva-app/CONTEXT.md` (the only file of `emva-app` it may read), follows
+> simulator, follows the skills and helper agents rules in section 3 of START_HERE, uses the vocabulary of `../emva-app/CONTEXT.md` (it may read only `CONTEXT.md`, `docs/adr/` and
+> `docs/START_HERE.md` of `emva-app`), follows
 > decision 0007, and talks to Emva only through uploaded files and the intake endpoints; `.claude/settings.json`
-> denying reads of `../emva-app/**` except `../emva-app/CONTEXT.md` and `../emva-app/docs/adr/**`; Python with uv,
+> denying reads of `../emva-app/**` except `../emva-app/CONTEXT.md`, `../emva-app/docs/adr/**` and
+> `../emva-app/docs/START_HERE.md`; Python with uv,
 > ruff, pytest.
 >
 > Use `/tdd` for the health-check path, hand independent set-up work to helper agents where it saves time, and
 > run `/code-review` before handing it over. Commit each repository in small commits. Ask me before creating any
 > remote repository.
 
-Done when: both repositories have a first commit, tests and lint pass, the health-check page shows data from the
-service through the generated client.
+Done when:
+- Both repositories are committed and pushed; nothing is left uncommitted.
+- In `emva-app`: `make install`, `make test`, `make lint` and `make check-client` pass; continuous integration is
+  green on the latest commit.
+- `make dev` starts everything and the health page shows the service's reply through the generated client, and
+  says the service cannot be reached when it is stopped.
+- An `emva-app` session is refused when it tries to read any file in `../emva-sim`; an `emva-sim` session is
+  refused on `../emva-app/services/` and allowed `../emva-app/CONTEXT.md`, `../emva-app/docs/adr/` and this file.
+- `emva-sim` tests and lint pass.
 
 ### Phase 1: the first thin slice (product track, `emva-app`)
 
@@ -151,9 +201,15 @@ Prompt:
 > not answer and ask me before building it. Build with `/tdd`, design the screens with `/frontend-design`, and run
 > `/code-review` before each branch is handed over.
 
-Done when: the whole path works in the browser on the test dataset, with tests.
-
-Then deploy to Railway (Europe region) so later slices are tested where they will run.
+Done when:
+- In the browser, on the hand-made test dataset: upload both files; map the columns and sales steps on the review
+  screen and confirm; train; see calibration and the comparison with the status-quo signal on the results screen;
+  score one new lead and see its score explanation.
+- Nothing trains before the mapping is confirmed (a test proves it).
+- No name, raw email or raw phone number is stored after formatting (a test proves it).
+- Tests cover mapping sales steps onto the standard ladder, the score formula and the injected clock.
+- `make test`, `make lint` and `make check-client` pass and continuous integration is green.
+- The app runs on Railway in a Europe region and the same path works there.
 
 ### Phase S: first industry profile and generator (simulator track, `emva-sim`, parallel with phases 1 to 3)
 
@@ -171,7 +227,14 @@ Prompt:
 > entries, duplicates, bots), plants effects that are not all simple or additive, and keeps the hidden truth in a
 > separate file. You never see Emva's model code. Generate datasets at the low, middle and high ends of each range.
 
-Done when: the profile is reviewed by the user, and datasets exist at each end of each range.
+Done when:
+- The planned-hospitality profile is written, every uncertain number has a range, a confidence and a source where
+  one exists, and the user has reviewed and approved it.
+- The generator writes files shaped like a real sales system export, with the listed kinds of mess, and keeps the
+  hidden truth in a separate file.
+- Datasets exist at the low, middle and high end of each range, reproducible from a fixed seed.
+- Tests show each planted effect is present in the generated data at the size the profile says.
+- `emva-sim` has continuous integration running its tests and lint, and it is green.
 
 ### Phase 2: deepen the model (product track)
 
@@ -179,6 +242,16 @@ Adds, one slice each: neglected leads and contact attempts; milestones declared 
 and momentum; the complex challenger model and the rule for when it wins; the full trust gate with its criteria
 written before results; the personal-traits switch, refusal and proxy check (decision 0008); deal size from the
 form into the score (decision 0003). Read decisions 0002, 0003, 0005, 0008, 0009 first.
+
+Done when:
+- The trust gate's pass-or-fail criteria are written down, and committed, before any phase 2 result is looked at.
+- The trust gate runs on the phase S datasets at every end of every range, and its full report (pass or fail for
+  each criterion) is in the phase report. A fail is reported, not fixed by tuning.
+- Tests show a neglected lead is never counted as a failed lead, and that a declared milestone's weight is learned,
+  not set by hand.
+- The challenger model is fitted on every run and the results screen says which model won and why.
+- The personal-traits switch exists, and the proxy check reports on every run.
+- All tests and checks pass and continuous integration is green.
 
 ### Phase 3: the AI jobs (product track)
 
@@ -188,6 +261,17 @@ texts, each judgment kept only if its weight holds up); spam, bot, duplicate and
 and loss reasons read into judgments for later scores. Model responses are cached and never made up. Read
 decisions 0004 and 0010 first.
 
+Done when:
+- A mapping draft is produced from redacted column descriptions only, shown for review, and nothing trains until a
+  person confirms it (tests prove the AI never sees raw rows).
+- Every score on the scoring screen has a plain-words explanation that matches its score explanation chart.
+- The Haiku-versus-Jev comparison on the same lead texts is reported: for each judgment, whether its weight held
+  up, plus cost and speed. Judgments that did not hold up are not used.
+- Spam, bot, duplicate and fake-contact checks run on intake, with tests on hand-made examples.
+- Sales notes and loss reasons feed the later scores, with a test showing "never a real buyer" and "could not
+  reach them" are treated differently.
+- All tests and checks pass and continuous integration is green.
+
 ### Phase 4: the live intake and the simulator (both tracks meet)
 
 `emva-app` adds the lead intake endpoint and the stage-update endpoint, both on the injected clock, and the
@@ -195,13 +279,28 @@ screen that shows scores arriving. `emva-sim` adds the lead simulator: it sends 
 team on a sped-up clock, then grades Emva's scores against the hidden truth (the grading lives in `emva-sim`, so
 the hidden truth never enters `emva-app`). Read decision 0006 first.
 
-Done when: a simulated month of leads runs in minutes and the grading report passes or fails the trust gate.
+Done when:
+- A simulated month of leads, and their sales steps over the following months, runs in minutes on the sped-up
+  clock, through the same intake and stage-update endpoints real data will use.
+- The same code runs in real time (a short real-time run proves it).
+- The grading report compares Emva's scores with the hidden truth and passes or fails each trust-gate criterion.
+- A test shows the hidden truth never reaches `emva-app`.
+- All tests and checks pass in both repositories and continuous integration is green in both.
 
 ### Phase 5: climb the evidence ladder
 
 Public real-world data through the same formatter and model, then a pilot business's own past leads (first
 hospitality or real estate). Real estate and insurance profiles are added in `emva-sim`. Nothing is claimed
 until the trust gate passes on real data. Private data needs per-business encryption first (decision 0010).
+
+Done when:
+- At least one public real-world dataset has gone through the same formatter and model, with its trust-gate
+  report labelled "on public data".
+- Per-business encryption is in place before any private data is uploaded.
+- A pilot business's own past leads have gone through the formatter and model, and the trust gate's report on them
+  says pass or fail for each criterion, including the comparison with that business's status-quo signal.
+- The real estate and insurance profiles exist in `emva-sim` and their datasets pass through the same checks.
+- All tests and checks pass and continuous integration is green.
 
 ### Phase 6: the live connection to the platforms
 
@@ -210,3 +309,13 @@ then to a real account only with the pilot business's consent. Each update is it
 score; one event per campaign is the one the platform learns from, moving to a later stage when the checked
 volume and timing thresholds are met. Every platform limit is checked against current platform documentation and
 cited. Read decisions 0003 and 0012 first.
+
+Done when (for each platform, Google first):
+- The upload files are valid against the platform's current documentation, which is cited, with tests covering a
+  lead with no click identifier and one with only a scrambled email.
+- Events reach the platform's test account and are shown as received, each carrying the lead's full score and its
+  lead identifier, with no event sent twice.
+- The rule for moving the learning event to a later stage has its thresholds written down, checked against
+  current platform guidance, before any live data is looked at.
+- Sending to a real account happens only with the pilot business's written consent, and that consent is recorded.
+- All tests and checks pass and continuous integration is green.
