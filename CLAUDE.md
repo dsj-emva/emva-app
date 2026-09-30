@@ -10,6 +10,10 @@ debt) of [docs/START_HERE.md](docs/START_HERE.md). In short: read this file, the
 use its words exactly, then the decisions in [docs/adr/](docs/adr/) the task touches, then START_HERE for the
 phase you are in. If the code and a decision disagree, stop and ask.
 
+Section 3 includes the skills and helper agents rules: use a skill wherever one fits (`/tdd`, `/code-review`
+before every hand-over, `/research`, `/diagnose`, `/frontend-design`, `/to-prd` and `/to-issues`), and hand searches,
+reviews, research and parallel work to helper agents, checking their findings before acting on them.
+
 Never read `../emva-sim` (decision 0007); `.claude/settings.json` denies it.
 
 ## Layout
@@ -37,7 +41,7 @@ is an unusable x86 build.
 ## Designing screens
 
 - Always use the `ui-ux-pro-max` skill (installed with `uipro init --ai claude`, in `.claude/skills/`) when
-  designing or restyling any part of the front end.
+  designing or restyling any part of the front end, together with `/frontend-design` as START_HERE asks.
 - Colour scheme: orange, grey, black and white. Use the tokens in `apps/web/src/theme.css`, never raw colours;
   extend the tokens there when a screen needs a new one.
 
