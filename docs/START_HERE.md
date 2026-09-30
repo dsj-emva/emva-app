@@ -65,7 +65,28 @@ Rules that keep the documents and the code in step:
 - Every number from synthetic data is labelled "on simulated data"; from public data, "on public data".
 - Commits are small, and each ends with the co-author line the tooling asks for.
 
+### Skills and helper agents
+
+- Use a skill wherever one fits, in every phase, instead of working it out from scratch:
+  - `/tdd` to build every feature and fix, test first.
+  - `/code-review` on every branch before it is handed to the user to merge.
+  - `/research` for industry profiles, platform rules and anything that needs cited sources.
+  - `/diagnose` for any bug, failing test or slowdown.
+  - `/frontend-design` for every screen.
+  - `/to-prd` and `/to-issues` at the start of each phase, to turn its section of this file into issues.
+  - If a skill you want is not installed, say so and carry on without it; never invent one.
+- Hand work to helper agents (sub-agents) for searches across many files, reviews, research and independent tasks
+  that can run in parallel. Keep the main session for decisions, for talking to the user and for putting the
+  results together. A helper agent is told which files of section 1 to read, gets a self-contained task, and
+  reports back; its findings are checked before they are acted on. Helper agents working in `emva-app` never read
+  `emva-sim`, and the other way round.
+
 ## 4. Phases
+
+Every phase from 2 onwards starts with `/to-prd` and `/to-issues` on its section below, builds each issue with
+`/tdd`, uses `/frontend-design` for any screen, `/research` for any platform rule or outside fact, `/diagnose` for
+any bug, and `/code-review` before each branch is handed over, handing searches, reviews and parallel work to
+helper agents (section 3).
 
 Two repositories under `~/code/emva/`:
 
@@ -87,7 +108,7 @@ Prompt:
 > repositories exactly as section 4 of START_HERE describes. Do not build any product feature.
 >
 > In `emva-app`: `git init`; a `CLAUDE.md` that tells every session to follow section 1 and section 3 of
-> START_HERE and summarises the layout; the folders `apps/web` (Vite, React, TypeScript, strict mode),
+> START_HERE (including its skills and helper agents rules) and summarises the layout; the folders `apps/web` (Vite, React, TypeScript, strict mode),
 > `services/api` (Python 3.12, FastAPI, managed with uv; ruff and pytest), `packages/api-client` (generated from
 > the service's schema); one health-check endpoint shown on one page, proving the generated client works; a
 > Makefile or task runner with `test`, `lint`, `generate-client` and `dev`; continuous integration that runs tests
@@ -96,12 +117,14 @@ Prompt:
 > (a compose file).
 >
 > In `emva-sim`: `git init`; a `CLAUDE.md` saying it builds industry profiles, the generator and the lead
-> simulator, uses the vocabulary of `../emva-app/CONTEXT.md` (the only file of `emva-app` it may read), follows
+> simulator, follows the skills and helper agents rules in section 3 of START_HERE, uses the vocabulary of `../emva-app/CONTEXT.md` (the only file of `emva-app` it may read), follows
 > decision 0007, and talks to EMVA only through uploaded files and the intake endpoints; `.claude/settings.json`
 > denying reads of `../emva-app/**` except `../emva-app/CONTEXT.md` and `../emva-app/docs/adr/**`; Python with uv,
 > ruff, pytest.
 >
-> Commit each repository in small commits. Ask me before creating any remote repository.
+> Use `/tdd` for the health-check path, hand independent set-up work to helper agents where it saves time, and
+> run `/code-review` before handing it over. Commit each repository in small commits. Ask me before creating any
+> remote repository.
 
 Done when: both repositories have a first commit, tests and lint pass, the health-check page shows data from the
 service through the generated client.
@@ -124,7 +147,8 @@ Prompt:
 > comparison with the status-quo signal on a time-ordered backtest; a scoring screen that scores one lead and
 > shows its score explanation. Use a small hand-made test dataset inside the repository's tests; do not write a
 > data generator (that is `emva-sim`'s job). Use the words of CONTEXT.md exactly. List anything the decisions do
-> not answer and ask me before building it.
+> not answer and ask me before building it. Build with `/tdd`, design the screens with `/frontend-design`, and run
+> `/code-review` before each branch is handed over.
 
 Done when: the whole path works in the browser on the test dataset, with tests.
 
@@ -136,7 +160,8 @@ Goal: messy, realistic synthetic data for planned hospitality, then real estate,
 
 Prompt:
 
-> Read `CLAUDE.md`, `../emva-app/CONTEXT.md` and decision 0007. Research and write the industry profile for
+> Read `CLAUDE.md`, `../emva-app/CONTEXT.md` and decision 0007. Use `/research` (with helper agents in parallel,
+> one per topic) and write the industry profile for
 > planned hospitality (tailor-made safari-style trips; also corporate trips and events): form fields, sales steps
 > as the business's own sales system would name them, sales-cycle length, deal sizes, neglect rates, how enquiries
 > and sales notes are written, loss reasons. Every uncertain number is a range with a confidence (sourced,
