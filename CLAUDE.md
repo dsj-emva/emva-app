@@ -43,8 +43,8 @@ is an unusable x86 build.
 - Colour scheme: orange, grey, black and white. Use the tokens in `apps/web/src/theme.css`, never raw colours;
   extend the tokens there when a screen needs a new one.
 
-## Keeping emva-sim's deny list complete
+## What emva-sim may see
 
-`../emva-sim/.claude/settings.json` lists every top-level entry of this repository except `CONTEXT.md` and
-`docs/` (START_HERE and the decisions), because Claude Code cannot deny a folder with exceptions. Adding a new
-top-level file or folder here means asking the user to add it to that list.
+A hook in `../emva-sim/.claude/hooks/` lets `emva-sim` sessions read only `CONTEXT.md`, `docs/adr/` and
+`docs/START_HERE.md` here, and never write here. Anything else in this repository is private to it, whatever is
+added later.
