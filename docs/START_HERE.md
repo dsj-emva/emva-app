@@ -11,9 +11,8 @@ Every working session, in either repository, starts by reading, in this order:
 2. `emva-app/CONTEXT.md`: the word list. Use its words exactly, in code, tests, screens and messages. If a word
    you need is missing, or you want to use a word the list says to avoid, stop and ask.
 3. The decisions in `emva-app/docs/adr/` that the task touches (the table below says which).
-4. This file, for the phase you are in (`emva-app` only). `emva-sim` sessions never read this file; the rules
-   they need, including the skills and helper agents rules of section 3, are written in `emva-sim/CLAUDE.md`,
-   and their phase prompt comes from the user.
+4. This file, for the phase you are in. `emva-sim` sessions may read it too; besides this file they read only
+   `CONTEXT.md` and `docs/adr/` of `emva-app`.
 
 Rules that keep the documents and the code in step:
 

@@ -46,5 +46,5 @@ is an unusable x86 build.
 ## Keeping emva-sim's deny list complete
 
 `../emva-sim/.claude/settings.json` lists every top-level entry of this repository except `CONTEXT.md` and
-`docs/adr/`, because Claude Code cannot deny a folder with exceptions. Adding a new top-level file or folder
-here, or a new file in `docs/` beside `adr/`, means asking the user to add it to that list.
+`docs/` (START_HERE and the decisions), because Claude Code cannot deny a folder with exceptions. Adding a new
+top-level file or folder here means asking the user to add it to that list.
