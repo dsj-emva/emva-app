@@ -16,7 +16,7 @@ export function HealthPage({ client }: { client: ApiClient }) {
 
   return (
     <main>
-      <h1>EMVA</h1>
+      <h1>Emva</h1>
       {check.state === 'checking' && <p>Checking the service…</p>}
       {check.state === 'answered' && <p>Service status: {check.health.status}</p>}
       {check.state === 'unreachable' && <p>Service unreachable</p>}
