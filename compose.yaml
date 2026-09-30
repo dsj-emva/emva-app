@@ -1,0 +1,28 @@
+# Local development only: Postgres for records, S3-compatible object storage for files.
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_USER: emva
+      POSTGRES_PASSWORD: emva
+      POSTGRES_DB: emva
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U emva"]
+      interval: 2s
+      retries: 15
+
+  object-storage:
+    image: chrislusf/seaweedfs:4.48
+    command: server -s3 -dir=/data -ip.bind=0.0.0.0
+    ports:
+      - "8333:8333"
+    volumes:
+      - object-storage:/data
+
+volumes:
+  postgres:
+  object-storage:
