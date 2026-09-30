@@ -1,4 +1,4 @@
-# Start here: how EMVA is built
+# Start here: how Emva is built
 
 This file is the build plan and the prompts that start each phase. It was written at the end of the planning
 session of 2026-09-30. The rulings behind it are in `CONTEXT.md` (the word list) and `docs/adr/` (the decisions).
@@ -11,7 +11,9 @@ Every working session, in either repository, starts by reading, in this order:
 2. `emva-app/CONTEXT.md`: the word list. Use its words exactly, in code, tests, screens and messages. If a word
    you need is missing, or you want to use a word the list says to avoid, stop and ask.
 3. The decisions in `emva-app/docs/adr/` that the task touches (the table below says which).
-4. This file, for the phase you are in.
+4. This file, for the phase you are in (`emva-app` only). `emva-sim` sessions never read this file; the rules
+   they need, including the skills and helper agents rules of section 3, are written in `emva-sim/CLAUDE.md`,
+   and their phase prompt comes from the user.
 
 Rules that keep the documents and the code in step:
 
@@ -118,7 +120,7 @@ Prompt:
 >
 > In `emva-sim`: `git init`; a `CLAUDE.md` saying it builds industry profiles, the generator and the lead
 > simulator, follows the skills and helper agents rules in section 3 of START_HERE, uses the vocabulary of `../emva-app/CONTEXT.md` (the only file of `emva-app` it may read), follows
-> decision 0007, and talks to EMVA only through uploaded files and the intake endpoints; `.claude/settings.json`
+> decision 0007, and talks to Emva only through uploaded files and the intake endpoints; `.claude/settings.json`
 > denying reads of `../emva-app/**` except `../emva-app/CONTEXT.md` and `../emva-app/docs/adr/**`; Python with uv,
 > ruff, pytest.
 >
@@ -166,9 +168,9 @@ Prompt:
 > as the business's own sales system would name them, sales-cycle length, deal sizes, neglect rates, how enquiries
 > and sales notes are written, loss reasons. Every uncertain number is a range with a confidence (sourced,
 > estimated, guessed) and its source. Then build the generator: it writes files in the shape a real sales system
-> export would have (not EMVA's standard shape), with realistic mess (missing values, skipped steps, late
+> export would have (not Emva's standard shape), with realistic mess (missing values, skipped steps, late
 > entries, duplicates, bots), plants effects that are not all simple or additive, and keeps the hidden truth in a
-> separate file. You never see EMVA's model code. Generate datasets at the low, middle and high ends of each range.
+> separate file. You never see Emva's model code. Generate datasets at the low, middle and high ends of each range.
 
 Done when: the profile is reviewed by the user, and datasets exist at each end of each range.
 
@@ -191,7 +193,7 @@ decisions 0004 and 0010 first.
 
 `emva-app` adds the lead intake endpoint and the stage-update endpoint, both on the injected clock, and the
 screen that shows scores arriving. `emva-sim` adds the lead simulator: it sends leads and plays a realistic sales
-team on a sped-up clock, then grades EMVA's scores against the hidden truth (the grading lives in `emva-sim`, so
+team on a sped-up clock, then grades Emva's scores against the hidden truth (the grading lives in `emva-sim`, so
 the hidden truth never enters `emva-app`). Read decision 0006 first.
 
 Done when: a simulated month of leads runs in minutes and the grading report passes or fails the trust gate.

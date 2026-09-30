@@ -12,7 +12,7 @@ Profiles are written by someone who does not write the model, and the model by s
 profiles' planted effects, so the synthetic test cannot be written in the model's own hand (the previous
 project's generator was the same additive model it tested). The split is structural: profiles, generator, lead
 simulator and hidden truth live in their own repository, `emva-sim`, beside `emva-app` under `~/code/emva/`.
-`emva-sim` reaches EMVA only as the outside world does (CSV uploads, the intake and CRM-update endpoints), and
+`emva-sim` reaches Emva only as the outside world does (CSV uploads, the intake and CRM-update endpoints), and
 agent settings in `emva-app` deny reading `../emva-sim`.
 
 Phase 1 ships profiles for the three target industries, deliberately far apart: insurance (short cycle, high

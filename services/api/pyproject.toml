@@ -1,7 +1,7 @@
 [project]
 name = "emva-api"
 version = "0.1.0"
-description = "EMVA service: the API the screens use, and all domain logic behind it"
+description = "Emva service: the API the screens use, and all domain logic behind it"
 requires-python = ">=3.12,<3.13"
 dependencies = [
     "fastapi>=0.142.2",

@@ -1,6 +1,6 @@
-# EMVA
+# Emva
 
-EMVA scores inbound leads for advertisers and sends each lead's score back to the ad platforms (Google Ads,
+Emva scores inbound leads for advertisers and sends each lead's score back to the ad platforms (Google Ads,
 Meta, TikTok and others), so the platforms bid for leads that become customers rather than for form fills.
 
 ## Language
@@ -17,7 +17,7 @@ not won. Used to train; never known when a lead is first scored.
 _Avoid_: label (a label is what training derives from an outcome), conversion
 
 **Lead score**:
-The number EMVA sends the ad platforms for a lead: a relative measure of quality on a fixed, stable scale,
+The number Emva sends the ad platforms for a lead: a relative measure of quality on a fixed, stable scale,
 never money. The platforms require a currency alongside it; that is a formality.
 _Avoid_: lead value, conversion value (the platforms' name for the field that carries it)
 
@@ -40,7 +40,7 @@ whose events reach the platform in time and in enough volume for it to learn fro
 _Avoid_: primary conversion (Google's name for the same role)
 
 **Observed event**:
-Any other event EMVA sends: reported and building history, not bid on.
+Any other event Emva sends: reported and building history, not bid on.
 _Avoid_: secondary conversion
 
 **Deal value**:
@@ -100,7 +100,7 @@ Known only after submission, so it informs **Stage scores**, never the **Submit 
 
 **Formatter**:
 The step that turns an advertiser's data, in whatever shape it arrives (spreadsheet, CRM export), into
-EMVA's canonical structure, outcome included.
+Emva's canonical structure, outcome included.
 _Avoid_: converter, adapter, importer
 
 **Judgment**:
@@ -117,11 +117,11 @@ single benchmark can decide the result.
 
 **Considered sale**:
 A sale where the advertiser's team has to do work between the enquiry and the sale: a plan, an assessment, a
-quote or a proposal. Where EMVA fits; a purchase completed online without a salesperson is not one.
+quote or a proposal. Where Emva fits; a purchase completed online without a salesperson is not one.
 _Avoid_: high-touch sale, B2B sale
 
 **Target industries**:
-The three industries EMVA is built to serve, chosen because their sales processes sit far apart: insurance,
+The three industries Emva is built to serve, chosen because their sales processes sit far apart: insurance,
 real estate, and planned hospitality. One is chosen first for the pilot. Within each, only **Considered
 sales** are in scope (insurance: adviser-led life, protection and health, and broker-led cover; not policies
 bought online).
@@ -145,7 +145,7 @@ One advertiser's own past **Leads** with their **Stages** and **Outcomes**: what
 against when it is scored.
 
 **Cross-advertiser history**:
-What EMVA has seen across all its advertisers (e.g. the same person enquiring with several of them). Needs
+What Emva has seen across all its advertisers (e.g. the same person enquiring with several of them). Needs
 several advertisers and contract terms that allow it.
 
 ### Models
@@ -169,17 +169,17 @@ The three kinds of data a model is proven on, in order of how much they prove: a
 advertiser's private historical export (the real test).
 
 **Lead simulator**:
-A bot that plays both the advertiser's website and their CRM: it sends synthetic leads to EMVA as real ones
+A bot that plays both the advertiser's website and their CRM: it sends synthetic leads to Emva as real ones
 would arrive, then sends their **Stage** changes as a realistic sales team would record them (delays, neglect,
 skipped stages, sloppy entries), on a **Simulated clock**.
 
 **Simulated clock**:
-The time a simulation runs on, faster than real time (e.g. one day per minute). Everything EMVA records during
+The time a simulation runs on, faster than real time (e.g. one day per minute). Everything Emva records during
 a simulation is in simulated time.
 
 **Hidden truth**:
 What the generator or **Lead simulator** knows about each synthetic lead (its real quality, its eventual
-**Outcome**) and EMVA must not. Read only when grading EMVA.
+**Outcome**) and Emva must not. Read only when grading Emva.
 _Avoid_: ground truth (the previous project's name; same idea)
 
 **Trust gate**:
@@ -187,8 +187,8 @@ The pass/fail criteria, written before any result is seen, that a model must mee
 **Evidence ladder** before it is trusted there.
 
 **Status-quo signal**:
-What an advertiser's ad platforms receive today instead of EMVA's scores: usually every form fill sent as the
-same conversion, sometimes a hand-built lead-score rule. EMVA's promise is to be more accurate than it.
+What an advertiser's ad platforms receive today instead of Emva's scores: usually every form fill sent as the
+same conversion, sometimes a hand-built lead-score rule. Emva's promise is to be more accurate than it.
 
 **Backtest**:
 Scoring an advertiser's past leads with a model trained only on leads before them, then comparing with how

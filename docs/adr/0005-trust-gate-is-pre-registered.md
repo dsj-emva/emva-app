@@ -9,7 +9,7 @@ predicts). On public and private
 real data: calibration and the status-quo comparison only, labelled with their source. Ranking accuracy (AUC) is
 reported, not gated, because on synthetic data it mostly measures how hard the generator was made.
 
-The promise to an advertiser is that EMVA gives their ad platforms a more accurate good-lead / bad-lead signal,
+The promise to an advertiser is that Emva gives their ad platforms a more accurate good-lead / bad-lead signal,
 learned from their own data, than the status-quo signal the platforms receive today (usually every form fill
 sent alike, or the advertiser's hand-built lead-score rule). That is proven by a backtest on the advertiser's own
 history. Better conversion rates and more efficient ad spend are the expected consequence and are not claimed;
