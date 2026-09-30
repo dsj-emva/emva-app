@@ -159,12 +159,12 @@ Prompt:
 > (a compose file).
 >
 > In `emva-sim`: `git init`; a `CLAUDE.md` saying it builds industry profiles, the generator and the lead
-> simulator, follows the skills and helper agents rules in section 3 of START_HERE, uses the vocabulary of `../emva-app/CONTEXT.md` (it may read only `CONTEXT.md`, `docs/adr/` and
-> `docs/START_HERE.md` of `emva-app`), follows
-> decision 0007, and talks to Emva only through uploaded files and the intake endpoints; `.claude/settings.json`
-> denying reads of `../emva-app/**` except `../emva-app/CONTEXT.md`, `../emva-app/docs/adr/**` and
-> `../emva-app/docs/START_HERE.md`; Python with uv,
-> ruff, pytest.
+> simulator, follows the skills and helper agents rules in section 3 of START_HERE, uses the vocabulary of
+> `../emva-app/CONTEXT.md` (it may read only `CONTEXT.md`, `docs/adr/` and `docs/START_HERE.md` of `emva-app`),
+> follows decision 0007, and talks to Emva only through uploaded files and the intake endpoints; a guard hook in
+> `.claude/` (settings alone cannot allow files inside a denied folder) refusing reads of `../emva-app/**` except
+> `../emva-app/CONTEXT.md`, `../emva-app/docs/adr/**` and `../emva-app/docs/START_HERE.md`; Python with uv, ruff,
+> pytest.
 >
 > Use `/tdd` for the health-check path, hand independent set-up work to helper agents where it saves time, and
 > run `/code-review` before handing it over. Commit each repository in small commits. Ask me before creating any
