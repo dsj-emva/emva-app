@@ -17,6 +17,14 @@ describe('HealthPage', () => {
     expect(await screen.findByText('Service status: ok')).toBeInTheDocument()
   })
 
+  it('says the service answered with an error when it replies with one', async () => {
+    const client = clientAnswering(async () => new Response('boom', { status: 500 }))
+
+    render(<HealthPage client={client} />)
+
+    expect(await screen.findByText('Service answered with an error')).toBeInTheDocument()
+  })
+
   it('says the service is unreachable when the request fails', async () => {
     const client = clientAnswering(async () => {
       throw new TypeError('Failed to fetch')
