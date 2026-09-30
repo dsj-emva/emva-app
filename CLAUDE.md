@@ -46,5 +46,5 @@ is an unusable x86 build.
 ## What emva-sim may see
 
 A hook in `../emva-sim/.claude/hooks/` lets `emva-sim` sessions read only `CONTEXT.md`, `docs/adr/` and
-`docs/START_HERE.md` here, and never write here. Anything else in this repository is private to it, whatever is
-added later.
+`docs/START_HERE.md` here, and never write here. Everything else here stays hidden from `emva-sim`,
+including files added later.
