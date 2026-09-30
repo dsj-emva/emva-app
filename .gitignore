@@ -39,3 +39,8 @@ __pycache__/
 
 # Local Claude settings
 .claude/settings.local.json
+
+# Installed skills ship reference tables; they are tooling, not lead data
+!.claude/skills/**/data/
+!.claude/skills/**/*.csv
+!.claude/skills/**/*.jsonl
