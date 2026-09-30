@@ -25,6 +25,14 @@ describe('HealthPage', () => {
     expect(await screen.findByText('Service answered with an error')).toBeInTheDocument()
   })
 
+  it.each([502, 503, 504])('says the service is unreachable when a proxy answers %i for it', async (status) => {
+    const client = clientAnswering(async () => new Response('Bad Gateway', { status }))
+
+    render(<HealthPage client={client} />)
+
+    expect(await screen.findByText('Service unreachable')).toBeInTheDocument()
+  })
+
   it('says the service is unreachable when the request fails', async () => {
     const client = clientAnswering(async () => {
       throw new TypeError('Failed to fetch')
