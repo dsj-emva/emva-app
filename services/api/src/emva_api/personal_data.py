@@ -31,7 +31,6 @@ SINGLE_COUNTRY_CURRENCIES: dict[str, str] = {
     "SEK": "SE",
     "TZS": "TZ",
     "UGX": "UG",
-    "ZAR": "ZA",
 }
 
 # Names a country column commonly holds that are not the country's English name or ISO code.

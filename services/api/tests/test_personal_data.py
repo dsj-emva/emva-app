@@ -95,10 +95,12 @@ def test_kenya_is_read_however_its_country_is_written(country: str):
 def test_without_a_country_a_currency_of_exactly_one_country_gives_its_region(currency: str):
     assert phone_region("", currency) == "GB"
     assert phone_region("", "KES") == "KE"
-    assert phone_region("", "ZAR") == "ZA"
+    assert phone_region("", "UGX") == "UG"
 
 
-@pytest.mark.parametrize("currency", ["EUR", "USD", "XOF", "AUD", "", "pounds"])
+@pytest.mark.parametrize(
+    "currency", ["EUR", "USD", "XOF", "AUD", "NZD", "ZAR", "INR", "CHF", "DKK", "", "pounds"]
+)
 def test_a_currency_shared_by_several_countries_or_unknown_decides_nothing(currency: str):
     assert phone_region("", currency) is None
 
