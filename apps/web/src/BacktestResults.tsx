@@ -70,7 +70,10 @@ function TrustGate({ checks, passed }: { checks: Check[]; passed: boolean }) {
   return (
     <div className="trust-gate">
       <p className="gate-verdict">
-        Trust gate: <Mark passed={passed} />
+        <span aria-hidden="true">
+          Trust gate: <Mark passed={passed} />
+        </span>
+        <span className="visually-hidden">Trust gate: {passed ? 'Passed' : 'Failed'}</span>
       </p>
       <ul className="checks" aria-label="Checks of the Trust gate">
         {checks.map((check) => (
@@ -251,7 +254,8 @@ function StatusQuo({
           <p className="data">
             95% interval {signed(comparison.interval_low)} to {signed(comparison.interval_high)}
           </p>
-          <Interval comparison={comparison} betterSide={wording.better_side} />
+          <Interval comparison={comparison} />
+          <p className="interval-better">{wording.better_side}</p>
           <dl className="briers">
             <div>
               <dt>Emva’s Brier score</dt>
@@ -270,7 +274,7 @@ function StatusQuo({
 }
 
 // The interval drawn against zero, on a scale wide enough for both.
-function Interval({ comparison, betterSide }: { comparison: Comparison; betterSide: string }) {
+function Interval({ comparison }: { comparison: Comparison }) {
   const width = 280
   const pad = 12
   const reach = Math.max(Math.abs(comparison.interval_low), Math.abs(comparison.interval_high))
@@ -280,9 +284,6 @@ function Interval({ comparison, betterSide }: { comparison: Comparison; betterSi
       <line className="zero" x1={at(0)} x2={at(0)} y1={6} y2={30} />
       <text className="tick" x={at(0)} y={44} textAnchor="middle">
         0
-      </text>
-      <text className="tick" x={width - pad} y={44} textAnchor="end">
-        {betterSide}
       </text>
       <line
         className="range"
