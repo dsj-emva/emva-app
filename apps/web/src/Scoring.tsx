@@ -333,10 +333,11 @@ function formatChance(chance: number): string {
   )
 }
 
-// A move of the chance in percentage points, signed.
+// A move of the chance in percentage points, signed, every one to the same precision.
 function formatPoints(change: number): string {
   const points = new Intl.NumberFormat(undefined, {
-    maximumFractionDigits: 2,
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
     signDisplay: 'always',
   }).format(change * 100)
   return `${points.replace('-', '−')} pts`

@@ -154,10 +154,36 @@ describe('Scoring', () => {
       .map((row) => row.textContent)
     expect(rows).toEqual([
       'Typical leadEvery number at its training mean, every category at its most common value20%',
-      'Trip TypeSafari → Honeymoon−5 pts',
+      'Trip TypeSafari → Honeymoon−5.0 pts',
       'Budget (GBP)9,250 → not given−2.5 pts',
       'This leadSubmit score 1,50012.5%',
     ])
+  })
+
+  it('writes every move of the chance to the same precision', async () => {
+    const [trip, budget] = SCORED.explanation.steps
+    const moves = {
+      ...SCORED,
+      chance_of_winning: 0.9587,
+      explanation: {
+        typical_chance: 0.2,
+        steps: [
+          { ...trip!, after: 0.75, change: 0.55 },
+          { ...budget!, before: 0.75, after: 0.9587, change: 0.2087 },
+        ],
+      },
+    }
+    const service = fakeService({
+      [`GET ${FORM_PATH}`]: () => Response.json(FORM),
+      [`POST ${SCORES}`]: () => Response.json(moves),
+    })
+    renderScoring(service.client)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Score this lead' }))
+
+    const explanation = await screen.findByRole('figure', { name: /Score explanation/ })
+    expect(within(explanation).getAllByText('+55.0 pts').length).toBeGreaterThan(0)
+    expect(within(explanation).getAllByText('+20.9 pts').length).toBeGreaterThan(0)
   })
 
   it('shows a lead equal to the typical one as no change', async () => {
