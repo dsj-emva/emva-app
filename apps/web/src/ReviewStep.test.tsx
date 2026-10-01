@@ -1,8 +1,9 @@
 import type { components } from '@emva/api-client'
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 
 import { ReviewStep } from './ReviewStep.tsx'
+import { CHOICES } from './test-mapping.ts'
 import { fakeService } from './test-service.ts'
 
 type Advertiser = components['schemas']['Advertiser']
@@ -31,6 +32,7 @@ const BOTH_UPLOADED: Advertiser = {
     column_names: ['Lead ID', 'Stage', 'Changed At', 'Deal Value'],
   },
   review_available: true,
+  mapping_confirmed_at: null,
 }
 
 const EMPTY: Mapping = {
@@ -47,16 +49,6 @@ const EMPTY: Mapping = {
   typical_deal_size: null,
 }
 
-const PLACES: MappingReview['places'] = [
-  { place: 'submitted', name: 'Submitted' },
-  { place: 'contact_attempted', name: 'Contact attempted' },
-  { place: 'engaged', name: 'Engaged' },
-  { place: 'qualified', name: 'Qualified' },
-  { place: 'proposal', name: 'Proposal' },
-  { place: 'won', name: 'Won' },
-  { place: 'lost', name: 'Lost' },
-]
-
 const CRM_STAGES = [
   { name: 'New enquiry', row_count: 98 },
   { name: 'Closed won', row_count: 19 },
@@ -68,7 +60,7 @@ function review(mapping: Mapping, rest: Partial<MappingReview> = {}): MappingRev
     confirmed_at: null,
     problems: ['Enter the typical deal size.'],
     crm_stages: mapping.stage_history.crm_stage ? CRM_STAGES : [],
-    places: PLACES,
+    ...CHOICES,
     ...rest,
   }
 }
@@ -113,6 +105,10 @@ async function region(name: string) {
 const LEADS = 'Leads file: leads.csv'
 const HISTORY = 'Stage-history file: stage_history.csv'
 
+function renderReview(client: ReturnType<typeof fakeService>['client'], onConfirmed = () => {}) {
+  render(<ReviewStep client={client} advertiser={BOTH_UPLOADED} onConfirmed={onConfirmed} />)
+}
+
 function choose(control: HTMLElement, value: string) {
   fireEvent.change(control, { target: { value } })
 }
@@ -126,7 +122,7 @@ describe('ReviewStep', () => {
       crm_stages: { 'Closed won': 'won' as const },
       typical_deal_size: 12000,
     }
-    render(<ReviewStep client={draftService(review(saved)).client} advertiser={BOTH_UPLOADED} />)
+    renderReview(draftService(review(saved)).client)
 
     const leads = await region(LEADS)
     expect(await leads.findByLabelText('Lead identifier')).toHaveValue('Lead ID')
@@ -138,7 +134,7 @@ describe('ReviewStep', () => {
 
   it('saves the draft as the person marks each column', async () => {
     const service = draftService()
-    render(<ReviewStep client={service.client} advertiser={BOTH_UPLOADED} />)
+    renderReview(service.client)
     const leads = await region(LEADS)
 
     choose(await leads.findByLabelText('Lead identifier'), 'Lead ID')
@@ -158,7 +154,7 @@ describe('ReviewStep', () => {
 
   it('places each CRM stage of the marked column on the ladder or on Lost', async () => {
     const service = draftService()
-    render(<ReviewStep client={service.client} advertiser={BOTH_UPLOADED} />)
+    renderReview(service.client)
     const history = await region(HISTORY)
 
     choose(await history.findByLabelText('CRM stage'), 'Stage')
@@ -186,7 +182,7 @@ describe('ReviewStep', () => {
 
   it('saves the typical deal size the person enters', async () => {
     const service = draftService()
-    render(<ReviewStep client={service.client} advertiser={BOTH_UPLOADED} />)
+    renderReview(service.client)
 
     fireEvent.change(await screen.findByLabelText('Typical deal size'), {
       target: { value: '12500' },
@@ -202,6 +198,7 @@ describe('ReviewStep', () => {
     ]
     render(
       <ReviewStep
+        onConfirmed={() => {}}
         client={draftService(review(EMPTY, { problems: reasons })).client}
         advertiser={BOTH_UPLOADED}
       />,
@@ -214,13 +211,14 @@ describe('ReviewStep', () => {
 
   it('confirms as a separate act and then shows the mapping confirmed and when', async () => {
     const confirmed = review(EMPTY, { problems: [], confirmed_at: '2026-09-20T16:30:00Z' })
+    const onConfirmed = vi.fn()
     const routes = fakeService({
       [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json([]),
       [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json([]),
       [`GET ${ADVERTISER}/mapping`]: () => Response.json(review(EMPTY, { problems: [] })),
       [`POST ${ADVERTISER}/mapping/confirmation`]: () => Response.json(confirmed),
     })
-    render(<ReviewStep client={routes.client} advertiser={BOTH_UPLOADED} />)
+    renderReview(routes.client, onConfirmed)
     expect(routes.sentTo(`POST ${ADVERTISER}/mapping/confirmation`)).toHaveLength(0)
 
     fireEvent.click(await screen.findByRole('button', { name: 'Confirm the mapping' }))
@@ -231,6 +229,7 @@ describe('ReviewStep', () => {
     expect(status).toHaveTextContent('can no longer be changed')
     expect(screen.getByLabelText('Typical deal size')).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Confirm the mapping' })).not.toBeInTheDocument()
+    expect(onConfirmed).toHaveBeenCalledOnce()
   })
 
   it('shows why the service refused to confirm', async () => {
@@ -241,10 +240,74 @@ describe('ReviewStep', () => {
       [`POST ${ADVERTISER}/mapping/confirmation`]: () =>
         Response.json({ detail: 'The mapping is already confirmed.' }, { status: 409 }),
     })
-    render(<ReviewStep client={service.client} advertiser={BOTH_UPLOADED} />)
+    renderReview(service.client)
 
     fireEvent.click(await screen.findByRole('button', { name: 'Confirm the mapping' }))
 
     expect(await screen.findByRole('alert')).toHaveTextContent('The mapping is already confirmed.')
+  })
+
+  it('saves the typed deal size once typing pauses, not on every key', async () => {
+    const service = draftService()
+    renderReview(service.client)
+    const size = await screen.findByLabelText('Typical deal size')
+
+    for (const typed of ['1', '12', '125', '1250', '12500']) {
+      fireEvent.change(size, { target: { value: typed } })
+    }
+
+    await waitFor(async () => expect((await lastSaved(service)).typical_deal_size).toBe(12500))
+    expect(service.sentTo(`PUT ${ADVERTISER}/mapping`)).toHaveLength(1)
+  })
+
+  it('ends overlapping saves with the newest draft', async () => {
+    let releaseFirst = () => {}
+    const firstAnswered = new Promise<void>((resolve) => (releaseFirst = resolve))
+    let saves = 0
+    const service = fakeService({
+      [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json([]),
+      [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json([]),
+      [`GET ${ADVERTISER}/mapping`]: () => Response.json(review(EMPTY)),
+      [`PUT ${ADVERTISER}/mapping`]: async (request) => {
+        const draft = (await request.json()) as Mapping
+        saves += 1
+        if (saves === 1) await firstAnswered
+        return Response.json(review(draft, { problems: [`saved ${draft.leads.lead_id}`] }))
+      },
+    })
+    renderReview(service.client)
+    const leadId = (await region(LEADS)).getByLabelText('Lead identifier')
+
+    choose(leadId, 'Lead ID')
+    await waitFor(() => expect(saves).toBe(1))
+    choose(leadId, 'Email')
+    choose(leadId, 'Trip Type')
+    releaseFirst()
+
+    expect(await screen.findByText('saved Trip Type')).toBeInTheDocument()
+    const sent = service.sentTo(`PUT ${ADVERTISER}/mapping`)
+    expect(sent).toHaveLength(2)
+    expect(((await sent[1].json()) as Mapping).leads.lead_id).toBe('Trip Type')
+    expect(leadId).toHaveValue('Trip Type')
+  })
+
+  it('says the draft was not saved, instead of showing reasons that may be out of date', async () => {
+    const service = fakeService({
+      [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json([]),
+      [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json([]),
+      [`GET ${ADVERTISER}/mapping`]: () => Response.json(review(EMPTY)),
+      [`PUT ${ADVERTISER}/mapping`]: () =>
+        Response.json({ detail: 'The stage-history file is not uploaded.' }, { status: 404 }),
+    })
+    renderReview(service.client)
+    await screen.findByRole('list', { name: 'Before you can confirm' })
+
+    choose((await region(LEADS)).getByLabelText('Lead identifier'), 'Lead ID')
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The draft was not saved: The stage-history file is not uploaded.',
+    )
+    expect(screen.queryByRole('list', { name: 'Before you can confirm' })).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Confirm the mapping' })).toBeDisabled()
   })
 })

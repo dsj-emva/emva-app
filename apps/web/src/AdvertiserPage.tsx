@@ -67,7 +67,18 @@ export function AdvertiserPage({ client }: { client: ApiClient }) {
             {step === 'upload' ? (
               <UploadStep client={client} advertiser={advertiser} onChanged={setAdvertiser} />
             ) : (
-              <ReviewStep client={client} advertiser={advertiser} />
+              <ReviewStep
+                client={client}
+                advertiser={advertiser}
+                onConfirmed={() => {
+                  client
+                    .GET('/advertisers/{advertiser_id}', {
+                      params: { path: { advertiser_id: advertiser.id } },
+                    })
+                    .then(({ data }) => data && setAdvertiser(data))
+                    .catch(() => undefined)
+                }}
+              />
             )}
           </>
         )}

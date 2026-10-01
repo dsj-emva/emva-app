@@ -11,28 +11,11 @@ type FileProfile = components['schemas']['FileProfile']
 type Mapping = components['schemas']['Mapping']
 type MappingReview = components['schemas']['MappingReview']
 type LeadsColumns = components['schemas']['LeadsColumns']
-type StageHistoryColumns = components['schemas']['StageHistoryColumns']
-type Place = components['schemas']['Place']
+type InputKindChoice = components['schemas']['InputKindChoice']
+type StageOrLost = components['schemas']['StageOrLost']
 
-const LEADS_ROLES: { role: keyof Omit<LeadsColumns, 'inputs'>; label: string }[] = [
-  { role: 'lead_id', label: 'Lead identifier' },
-  { role: 'submitted_at', label: 'Submission time' },
-  { role: 'name', label: 'Name (removed)' },
-  { role: 'email', label: 'Email (scrambled)' },
-  { role: 'phone', label: 'Phone (scrambled)' },
-]
-
-const STAGE_HISTORY_ROLES: { role: keyof StageHistoryColumns; label: string }[] = [
-  { role: 'lead_id', label: 'Lead identifier' },
-  { role: 'crm_stage', label: 'CRM stage' },
-  { role: 'changed_at', label: 'When the change happened' },
-  { role: 'deal_value', label: 'Deal value' },
-]
-
-const INPUT_KINDS: { kind: ColumnKind; label: string }[] = [
-  { kind: 'number', label: 'Number' },
-  { kind: 'category', label: 'Category' },
-]
+// How long typing pauses before the draft is saved.
+const TYPING_PAUSE_MS = 400
 
 type Loaded =
   | { state: 'loading' }
@@ -41,14 +24,33 @@ type Loaded =
 
 type Saving = { state: 'saved' } | { state: 'saving' } | { state: 'failed'; problem: string }
 
-export function ReviewStep({ client, advertiser }: { client: ApiClient; advertiser: Advertiser }) {
+export function ReviewStep({
+  client,
+  advertiser,
+  onConfirmed,
+}: {
+  client: ApiClient
+  advertiser: Advertiser
+  onConfirmed: () => void
+}) {
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' })
   const [saving, setSaving] = useState<Saving>({ state: 'saved' })
   const [confirming, setConfirming] = useState(false)
   const [confirmProblem, setConfirmProblem] = useState<string | null>(null)
   const sending = useRef(false)
   const queued = useRef<Mapping | null>(null)
+  const typing = useRef<{ timer: ReturnType<typeof setTimeout>; flush: () => void } | null>(null)
   const path = { params: { path: { advertiser_id: advertiser.id } } }
+
+  // A draft still waiting for typing to pause is saved when the person leaves the screen.
+  useEffect(
+    () => () => {
+      if (!typing.current) return
+      clearTimeout(typing.current.timer)
+      typing.current.flush()
+    },
+    [],
+  )
 
   useEffect(() => {
     client
@@ -95,9 +97,17 @@ export function ReviewStep({ client, advertiser }: { client: ApiClient; advertis
     setSaving(outcome)
   }
 
-  function change(draft: Mapping) {
+  function change(draft: Mapping, { typed = false } = {}) {
     setLoaded((now) => (now.state === 'loaded' ? { ...now, mapping: draft } : now))
-    void save(draft)
+    if (typing.current) clearTimeout(typing.current.timer)
+    typing.current = null
+    if (!typed) return void save(draft)
+    setSaving({ state: 'saving' })
+    const flush = () => {
+      typing.current = null
+      void save(draft)
+    }
+    typing.current = { flush, timer: setTimeout(flush, TYPING_PAUSE_MS) }
   }
 
   async function confirm() {
@@ -108,8 +118,10 @@ export function ReviewStep({ client, advertiser }: { client: ApiClient; advertis
         '/advertisers/{advertiser_id}/mapping/confirmation',
         path,
       )
-      if (data) setLoaded({ state: 'loaded', review: data, mapping: data.mapping })
-      else setConfirmProblem(refusal(error, response))
+      if (data) {
+        setLoaded({ state: 'loaded', review: data, mapping: data.mapping })
+        onConfirmed()
+      } else setConfirmProblem(refusal(error, response))
     } catch {
       setConfirmProblem(UNREACHABLE)
     } finally {
@@ -141,7 +153,7 @@ export function ReviewStep({ client, advertiser }: { client: ApiClient; advertis
     setLeads({ inputs: kind ? { ...others, [column]: kind } : others })
   }
 
-  function place(name: string, where: Place | '') {
+  function place(name: string, where: StageOrLost | '') {
     const { [name]: _dropped, ...others } = placed
     change({ ...mapping, crm_stages: where ? { ...others, [name]: where } : others })
   }
@@ -163,7 +175,7 @@ export function ReviewStep({ client, advertiser }: { client: ApiClient; advertis
                 legend="What the leads file's columns hold"
                 hint="Every column not marked here, and not an input to the score, is dropped."
                 columns={advertiser.leads_file.column_names}
-                roles={LEADS_ROLES.map(({ role, label }) => ({
+                roles={review.leads_roles.map(({ role, label }) => ({
                   label,
                   value: leads[role] ?? null,
                   choose: (column) => setLeads({ [role]: column }),
@@ -174,6 +186,7 @@ export function ReviewStep({ client, advertiser }: { client: ApiClient; advertis
               heading: 'Input to the score',
               control: (column) => (
                 <InputKind
+                  kinds={review.input_kinds}
                   column={column}
                   kind={inputs[column] ?? ''}
                   choose={(kind) => setInput(column, kind)}
@@ -193,7 +206,7 @@ export function ReviewStep({ client, advertiser }: { client: ApiClient; advertis
               <RoleChoices
                 legend="What the stage-history file's columns hold"
                 columns={advertiser.stage_history_file.column_names}
-                roles={STAGE_HISTORY_ROLES.map(({ role, label }) => ({
+                roles={review.stage_history_roles.map(({ role, label }) => ({
                   label,
                   value: history[role] ?? null,
                   choose: (column) =>
@@ -207,7 +220,7 @@ export function ReviewStep({ client, advertiser }: { client: ApiClient; advertis
         )}
         <TypicalDealSize
           size={mapping.typical_deal_size ?? null}
-          choose={(size) => change({ ...mapping, typical_deal_size: size })}
+          choose={(size) => change({ ...mapping, typical_deal_size: size }, { typed: true })}
         />
       </fieldset>
       {!confirmed && (
@@ -289,10 +302,12 @@ function ColumnChoice({
 }
 
 function InputKind({
+  kinds,
   column,
   kind,
   choose,
 }: {
+  kinds: InputKindChoice[]
   column: string
   kind: ColumnKind | ''
   choose: (kind: ColumnKind | '') => void
@@ -304,7 +319,7 @@ function InputKind({
       onChange={(event) => choose(event.target.value as ColumnKind | '')}
     >
       <option value="">Not an input</option>
-      {INPUT_KINDS.map(({ kind: value, label }) => (
+      {kinds.map(({ kind: value, label }) => (
         <option key={value} value={value}>
           {label}
         </option>
@@ -414,8 +429,8 @@ function CrmStages({
   place,
 }: {
   review: MappingReview
-  placed: Record<string, Place>
-  place: (name: string, where: Place | '') => void
+  placed: Record<string, StageOrLost>
+  place: (name: string, where: StageOrLost | '') => void
 }) {
   return (
     <div className="crm-stages">
@@ -449,10 +464,12 @@ function CrmStages({
                       <select
                         aria-label={`“${stage.name}” on the ladder`}
                         value={placed[stage.name] ?? ''}
-                        onChange={(event) => place(stage.name, event.target.value as Place | '')}
+                        onChange={(event) =>
+                          place(stage.name, event.target.value as StageOrLost | '')
+                        }
                       >
                         <option value="">Not placed</option>
-                        {review.places.map(({ place: value, name }) => (
+                        {review.stages_and_lost.map(({ value, name }) => (
                           <option key={value} value={value}>
                             {name}
                           </option>
@@ -523,12 +540,11 @@ function Confirmation({
         {saving.state === 'saving' && 'Saving the draft…'}
         {saving.state === 'saved' && 'Draft saved.'}
       </p>
-      {saving.state === 'failed' && (
+      {saving.state === 'failed' ? (
         <p className="problem" role="alert">
-          {saving.problem}
+          The draft was not saved: {saving.problem} Change any field to try again.
         </p>
-      )}
-      {problems.length > 0 ? (
+      ) : problems.length > 0 ? (
         <div className="to-do" aria-live="polite">
           <h3 id={listId}>Before you can confirm</h3>
           <ul aria-labelledby={listId}>
