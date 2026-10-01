@@ -1,4 +1,4 @@
-"""The Transitions dataset: for each Transition the model learns, the leads that faced it and how
+"""The Transitions dataset: for each Transition the model has, the leads that faced it and how
 each fared, as of a time. Pure: no I/O.
 
 Only the Transitions from Contact attempted onwards are learned (decision 0002, ruling 2 of the
@@ -11,28 +11,31 @@ the Transition from that Stage only.
 
 import enum
 from collections.abc import Iterable
-from dataclasses import dataclass
 from datetime import datetime
+
+from pydantic import BaseModel, ConfigDict, computed_field
 
 from emva_api.formatter import FormattedLead
 from emva_api.ladder import LADDER, Stage, name_of, progress
 
 
-@dataclass(frozen=True)
-class Transition:
+class Transition(BaseModel):
     """A lead moving from one Stage to the next."""
+
+    model_config = ConfigDict(frozen=True)
 
     from_stage: Stage
     to_stage: Stage
 
+    @computed_field
     @property
     def name(self) -> str:
         return f"{name_of(self.from_stage)} → {name_of(self.to_stage)}"
 
 
-# The Transitions learned, in ladder order: from Contact attempted to Won.
-LEARNED: tuple[Transition, ...] = tuple(
-    Transition(LADDER[i], LADDER[i + 1])
+# The Transitions the model has, in ladder order: from Contact attempted to Won.
+TRANSITIONS: tuple[Transition, ...] = tuple(
+    Transition(from_stage=LADDER[i], to_stage=LADDER[i + 1])
     for i in range(LADDER.index(Stage.CONTACT_ATTEMPTED), len(LADDER) - 1)
 )
 
@@ -50,18 +53,18 @@ type Dataset = dict[Transition, list[tuple[FormattedLead, Faced]]]
 
 
 def transitions_dataset(leads: Iterable[FormattedLead], as_of: datetime) -> Dataset:
-    """Each learned Transition with every lead that faced it as of the time, in the order given.
+    """Each Transition with every lead that faced it as of the time, in the order given.
 
     Only leads submitted at or before the time, and only their stage events at or before it,
     count. A lead faces the Transitions in turn up to the first it did not make."""
-    dataset: Dataset = {transition: [] for transition in LEARNED}
+    dataset: Dataset = {transition: [] for transition in TRANSITIONS}
     for lead in leads:
         if lead.submitted_at > as_of:
             continue
         reached = progress(event for event in lead.stage_events if event.at <= as_of)
         if reached.neglected:
             continue
-        for transition in LEARNED:
+        for transition in TRANSITIONS:
             if not reached.reached(transition.from_stage):
                 break
             if reached.reached(transition.to_stage):

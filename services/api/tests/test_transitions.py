@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 from emva_api.formatter import FormattedLead
 from emva_api.ladder import LOST, Stage, StageEvent, StageOrLost
-from emva_api.transitions import LEARNED, Faced, Transition, transitions_dataset
+from emva_api.transitions import TRANSITIONS, Faced, Transition, transitions_dataset
 
 AS_OF = datetime(2024, 6, 1, tzinfo=UTC)
 
@@ -44,14 +44,14 @@ CONTACT, ENGAGED, QUALIFIED, PROPOSAL = (
 )
 
 
-def test_the_transitions_learned_run_from_contact_attempted_to_won():
-    assert [transition.name for transition in LEARNED] == [
+def test_the_transitions_modelled_run_from_contact_attempted_to_won():
+    assert [transition.name for transition in TRANSITIONS] == [
         "Contact attempted → Engaged",
         "Engaged → Qualified",
         "Qualified → Proposal",
         "Proposal → Won",
     ]
-    assert LEARNED[0] == Transition(Stage.CONTACT_ATTEMPTED, Stage.ENGAGED)
+    assert TRANSITIONS[0] == Transition(from_stage=Stage.CONTACT_ATTEMPTED, to_stage=Stage.ENGAGED)
 
 
 def test_a_won_lead_made_every_transition():
