@@ -107,7 +107,7 @@ Also in PRD #4's comments. Code comments cite them as "ruling N".
 
 ## Approval
 
-The user approved phase 1 on 2026-10-01, with three rulings, all made in the close-out pull request:
+The user approved phase 1 on 2026-10-01, with three rulings, carried out in the close-out pull request:
 
 1. **Calibration slope.** Kept as built: the slope is fitted over individual leads, and deciles are only how calibration is shown. The 0.8 to 1.2 range applies to synthetic, public and real data alike. Decision 0005 is amended to say so.
 2. **Outcome rules.** A later Stage after Lost reopens the lead, and Won is final for now; `ladder.py` cites this. What happens to a won deal later cancelled or refunded is START_HERE open decision 4, to be settled in phase 2.
