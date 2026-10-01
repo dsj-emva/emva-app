@@ -12,6 +12,6 @@ COPY services/api/src ./src
 RUN uv sync --locked --no-dev
 ENV PATH="/app/.venv/bin:$PATH"
 
-# Migrations run on every start, before the service accepts requests. "::" listens on IPv6 and
-# IPv4, so the screens can reach the service over a private network.
-CMD ["sh", "-c", "alembic upgrade head && exec uvicorn emva_api.main:app --host :: --port ${PORT:-8000}"]
+# Migrations run on every start, before the service accepts requests. An empty host listens on
+# every IPv4 and IPv6 address, so the service is reachable over either on a private network.
+CMD ["sh", "-c", "alembic upgrade head && exec uvicorn emva_api.main:app --host '' --port ${PORT:-8000}"]
