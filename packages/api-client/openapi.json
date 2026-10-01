@@ -66,6 +66,133 @@
         "title": "Advertiser",
         "type": "object"
       },
+      "Backtest": {
+        "properties": {
+          "as_of": {
+            "description": "When the Outcomes compared with were read",
+            "format": "date-time",
+            "title": "As Of",
+            "type": "string"
+          },
+          "auc": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null unless both won and lost leads were scored",
+            "title": "Auc"
+          },
+          "checks": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "$ref": "#/components/schemas/Check"
+              },
+              {
+                "$ref": "#/components/schemas/Check"
+              }
+            ],
+            "title": "Checks",
+            "type": "array"
+          },
+          "comparison": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Comparison"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when no lead was scored"
+          },
+          "counts": {
+            "$ref": "#/components/schemas/Counts"
+          },
+          "folds": {
+            "items": {
+              "$ref": "#/components/schemas/FoldResult"
+            },
+            "title": "Folds",
+            "type": "array"
+          },
+          "groups": {
+            "items": {
+              "$ref": "#/components/schemas/Group"
+            },
+            "title": "Groups",
+            "type": "array"
+          },
+          "passed": {
+            "description": "Whether every check of the Trust gate passed",
+            "readOnly": true,
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "rules": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Rules",
+            "type": "array"
+          },
+          "slope": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Null when it cannot be fitted on the leads scored",
+            "title": "Slope"
+          }
+        },
+        "required": [
+          "as_of",
+          "rules",
+          "counts",
+          "folds",
+          "groups",
+          "slope",
+          "comparison",
+          "auc",
+          "checks",
+          "passed"
+        ],
+        "title": "Backtest",
+        "type": "object"
+      },
+      "Check": {
+        "description": "One check of the Trust gate.",
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "passed": {
+            "title": "Passed",
+            "type": "boolean"
+          },
+          "threshold": {
+            "title": "Threshold",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "threshold",
+          "passed"
+        ],
+        "title": "Check",
+        "type": "object"
+      },
       "Choice": {
         "properties": {
           "label": {
@@ -115,6 +242,80 @@
         ],
         "title": "ColumnKind",
         "type": "string"
+      },
+      "Comparison": {
+        "description": "Emva against the Status-quo signal, by Brier score (lower is more accurate).",
+        "properties": {
+          "difference": {
+            "description": "Status quo's Brier score minus Emva's, per lead",
+            "title": "Difference",
+            "type": "number"
+          },
+          "emva_brier": {
+            "title": "Emva Brier",
+            "type": "number"
+          },
+          "interval_high": {
+            "title": "Interval High",
+            "type": "number"
+          },
+          "interval_low": {
+            "title": "Interval Low",
+            "type": "number"
+          },
+          "status_quo_brier": {
+            "title": "Status Quo Brier",
+            "type": "number"
+          }
+        },
+        "required": [
+          "emva_brier",
+          "status_quo_brier",
+          "difference",
+          "interval_low",
+          "interval_high"
+        ],
+        "title": "Comparison",
+        "type": "object"
+      },
+      "Counts": {
+        "properties": {
+          "leads": {
+            "title": "Leads",
+            "type": "integer"
+          },
+          "no_outcome_yet": {
+            "description": "Leads neither won nor lost yet: left out",
+            "title": "No Outcome Yet",
+            "type": "integer"
+          },
+          "refused": {
+            "description": "Leads that could not be scored, by reason",
+            "items": {
+              "$ref": "#/components/schemas/Refusals"
+            },
+            "title": "Refused",
+            "type": "array"
+          },
+          "scored": {
+            "title": "Scored",
+            "type": "integer"
+          },
+          "training_only": {
+            "description": "Leads of the first fold: trained on, never scored",
+            "title": "Training Only",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "leads",
+          "training_only",
+          "no_outcome_yet",
+          "refused",
+          "scored"
+        ],
+        "title": "Counts",
+        "type": "object"
       },
       "CrmStage": {
         "properties": {
@@ -259,6 +460,71 @@
           "raw_kept"
         ],
         "title": "FileProfile",
+        "type": "object"
+      },
+      "FoldResult": {
+        "properties": {
+          "leads": {
+            "title": "Leads",
+            "type": "integer"
+          },
+          "start": {
+            "description": "When its first lead was submitted",
+            "format": "date-time",
+            "title": "Start",
+            "type": "string"
+          },
+          "status_quo_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The win rate of the leads before it with an Outcome at its start",
+            "title": "Status Quo Rate"
+          },
+          "trained_on": {
+            "description": "Leads submitted before its start",
+            "title": "Trained On",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "start",
+          "leads",
+          "trained_on",
+          "status_quo_rate"
+        ],
+        "title": "FoldResult",
+        "type": "object"
+      },
+      "Group": {
+        "description": "One calibration group.",
+        "properties": {
+          "actual": {
+            "description": "The share of the group's leads that were won",
+            "title": "Actual",
+            "type": "number"
+          },
+          "leads": {
+            "title": "Leads",
+            "type": "integer"
+          },
+          "predicted": {
+            "description": "The group's mean predicted chance of winning",
+            "title": "Predicted",
+            "type": "number"
+          }
+        },
+        "required": [
+          "leads",
+          "predicted",
+          "actual"
+        ],
+        "title": "Group",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -646,6 +912,24 @@
         "title": "Problem",
         "type": "object"
       },
+      "Refusals": {
+        "properties": {
+          "leads": {
+            "title": "Leads",
+            "type": "integer"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "leads"
+        ],
+        "title": "Refusals",
+        "type": "object"
+      },
       "ScoredLead": {
         "properties": {
           "chance_of_winning": {
@@ -1011,6 +1295,22 @@
       },
       "TrainingRunView": {
         "properties": {
+          "backtest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Backtest"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The run's Backtest; null for a run trained before Backtests were kept"
+          },
+          "data_source": {
+            "description": "The label every number of the run carries, e.g. 'on hand-made test data'",
+            "title": "Data Source",
+            "type": "string"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -1033,7 +1333,9 @@
         "required": [
           "id",
           "trained_at",
-          "transitions"
+          "transitions",
+          "data_source",
+          "backtest"
         ],
         "title": "TrainingRunView",
         "type": "object"

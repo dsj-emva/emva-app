@@ -223,3 +223,49 @@ def test_when_the_training_run_cannot_be_recorded_its_model_is_not_kept_either(
 
     assert refused.status_code == 503
     assert training_runs_stored(own_settings, own_bucket) == (0, [])
+
+
+def test_a_training_run_comes_with_its_backtest_labelled_with_its_data_source(
+    client: TestClient, clock: FixedClock
+):
+    advertiser = map_hand_made(client)
+    confirm(client, advertiser)
+    clock.set(datetime(2026, 9, 15, 8, 30, tzinfo=UTC))
+
+    run = train(client, advertiser).json()["latest"]
+
+    assert run["data_source"] == "on hand-made test data"
+    result = run["backtest"]
+    assert result["as_of"] == "2026-09-15T08:30:00Z"
+    # 100 leads in five folds of 20; the 80 after the first, less 22 with no Outcome yet.
+    assert result["counts"] == {
+        "leads": 100,
+        "training_only": 20,
+        "no_outcome_yet": 22,
+        "refused": [],
+        "scored": 58,
+    }
+    assert [g["leads"] for g in result["groups"]] == [12, 12, 12, 11, 11]
+    # The hand-made dataset's result, as it came out; a fail is reported as a fail.
+    assert result["slope"] == pytest.approx(1.218, abs=1e-3)
+    assert result["comparison"]["difference"] == pytest.approx(0.0218, abs=1e-4)
+    assert result["comparison"]["interval_low"] < 0 < result["comparison"]["interval_high"]
+    assert result["auc"] == pytest.approx(0.718, abs=1e-3)
+    assert [(c["name"], c["passed"]) for c in result["checks"]] == [
+        ("Calibration", False),
+        ("Better than the Status-quo signal", False),
+    ]
+    assert result["passed"] is False
+    assert training(client, advertiser).json()["latest"] == run
+
+
+def test_the_backtest_is_kept_in_object_storage_as_readable_json(client: TestClient, bucket):
+    advertiser = map_hand_made(client)
+    confirm(client, advertiser)
+
+    run = train(client, advertiser).json()["latest"]
+
+    stored = bucket.Object(f"advertisers/{advertiser}/training-runs/{run['id']}-backtest.json")
+    kept = json.loads(stored.get()["Body"].read())
+    assert kept["counts"] == run["backtest"]["counts"]
+    assert kept["slope"] == run["backtest"]["slope"]

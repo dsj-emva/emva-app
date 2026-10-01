@@ -14,7 +14,7 @@ from dataclasses import dataclass
 from datetime import datetime
 
 import numpy as np
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 from emva_api.features import Refused
 from emva_api.formatter import FormattedLead
@@ -126,6 +126,7 @@ class Backtest(BaseModel):
     auc: float | None = Field(description="Null unless both won and lost leads were scored")
     checks: tuple[Check, Check]
 
+    @computed_field(description="Whether every check of the Trust gate passed")
     @property
     def passed(self) -> bool:
         return all(check.passed for check in self.checks)
