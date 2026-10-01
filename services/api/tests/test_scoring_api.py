@@ -9,7 +9,7 @@ from fastapi.testclient import TestClient
 from test_formatting_api import confirm, map_hand_made
 from test_training_api import train
 
-NOT_GIVEN = {"value": "", "label": "Not given"}
+NOT_GIVEN = {"value": "", "label": "not given"}
 A_LEAD = {
     "Enquiry Channel": "Phone",
     "Trip Type": "Safari",

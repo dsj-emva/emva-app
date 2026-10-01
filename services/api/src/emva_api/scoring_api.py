@@ -102,8 +102,7 @@ def get_scoring_form(advertiser_id: uuid.UUID, session: SessionDep, store: Store
         else:
             typical = categories[column]
             choices = [
-                Choice(value=value or "", label=value or NOT_GIVEN.capitalize())
-                for value in values[column]
+                Choice(value=value or "", label=value or NOT_GIVEN) for value in values[column]
             ]
         inputs.append(
             ScoringInput(column=column, kind=kind, typical=value_text(typical), choices=choices)

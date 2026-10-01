@@ -17,6 +17,12 @@
   --color-accent: var(--color-orange);
   /* Text and icons drawn on the accent. */
   --color-on-accent: var(--color-black);
+  /* The Score explanation: a chance (a total), an input that pushed it up, one that pulled it
+     down. Up and down also differ by sign and position, never by colour alone. */
+  --color-chart-total: var(--color-text);
+  --color-chart-rise: var(--color-orange);
+  --color-chart-fall: var(--color-grey);
+  --color-chart-track: var(--color-surface);
 
   --font-sans: 'Fira Sans', system-ui, sans-serif;
   --font-data: 'Fira Code', ui-monospace, monospace;
@@ -37,6 +43,7 @@
     --color-muted: var(--color-grey-light);
     --color-rule: var(--color-grey-pale);
     --color-rule-soft: var(--color-grey);
+    --color-chart-fall: var(--color-grey-light);
   }
 }
 
@@ -47,6 +54,7 @@
   --color-muted: var(--color-grey-light);
   --color-rule: var(--color-grey-pale);
   --color-rule-soft: var(--color-grey);
+  --color-chart-fall: var(--color-grey-light);
 }
 
 body {
