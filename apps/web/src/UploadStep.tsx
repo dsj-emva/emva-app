@@ -25,6 +25,7 @@ export function UploadStep({
           label={label}
           holds={holds}
           file={fileOf(advertiser, kind)}
+          locked={advertiser.mapping_confirmed_at !== null}
           upload={async (file) => {
             const { data, error, response } = await client.PUT(
               '/advertisers/{advertiser_id}/files/{kind}',
@@ -57,12 +58,14 @@ function FilePanel({
   label,
   holds,
   file,
+  locked,
   upload,
 }: {
   number: number
   label: string
   holds: string
   file: FileProfile | null
+  locked: boolean
   upload: (file: File) => Promise<string | null>
 }) {
   const headingId = useId()
@@ -108,6 +111,9 @@ function FilePanel({
           </div>
         </dl>
       )}
+      {locked ? (
+        <p className="muted">The mapping is confirmed, so this file can no longer be replaced.</p>
+      ) : (
       <div className="file-pick">
         <label htmlFor={inputId} className="secondary" data-busy={sending}>
           {sending
@@ -128,6 +134,7 @@ function FilePanel({
           </p>
         )}
       </div>
+      )}
     </section>
   )
 }

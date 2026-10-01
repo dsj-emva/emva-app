@@ -3,6 +3,7 @@ import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
 import { AdvertiserPage } from './AdvertiserPage.tsx'
+import { CHOICES } from './test-mapping.ts'
 import { fakeService } from './test-service.ts'
 
 type Advertiser = components['schemas']['Advertiser']
@@ -42,6 +43,7 @@ function advertiser(files: Partial<Advertiser> = {}): Advertiser {
     leads_file: null,
     stage_history_file: null,
     review_available: false,
+    mapping_confirmed_at: null,
     ...files,
   }
 }
@@ -156,6 +158,14 @@ describe('AdvertiserPage', () => {
       'POST /advertisers': () => Response.json(BOTH_UPLOADED, { status: 201 }),
       [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json(LEADS_COLUMNS),
       [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json(STAGE_HISTORY_COLUMNS),
+      [`GET ${ADVERTISER}/mapping`]: () =>
+        Response.json({
+          mapping: { leads: {}, stage_history: {} },
+          confirmed_at: null,
+          problems: [],
+          crm_stages: [],
+          ...CHOICES,
+        }),
     })
     render(<AdvertiserPage client={service.client} />)
     await nameTheAdvertiser()
@@ -188,29 +198,83 @@ describe('AdvertiserPage', () => {
     expect(within(panel).getByText('99 rows')).toBeInTheDocument()
   })
 
-  it('lists every CRM stage name in the column the person picks, with its row count', async () => {
+  it('keeps the draft mapping when the person leaves the review and comes back', async () => {
+    let kept: unknown = null
+    const draft = (mapping: unknown) => ({
+      mapping: mapping ?? {
+        leads: { inputs: {} },
+        stage_history: {},
+        crm_stages: {},
+        typical_deal_size: null,
+      },
+      confirmed_at: null,
+      problems: ['Enter the typical deal size.'],
+      crm_stages: [],
+      ...CHOICES,
+    })
     const service = fakeService({
       'POST /advertisers': () => Response.json(BOTH_UPLOADED, { status: 201 }),
       [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json(LEADS_COLUMNS),
       [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json(STAGE_HISTORY_COLUMNS),
-      [`GET ${ADVERTISER}/files/stage-history/crm-stages`]: (request) =>
-        new URL(request.url).searchParams.get('column') === 'Stage'
-          ? Response.json([
-              { name: 'New enquiry', row_count: 98 },
-              { name: 'Closed won', row_count: 19 },
-            ])
-          : Response.json({ detail: 'No such column' }, { status: 400 }),
+      [`GET ${ADVERTISER}/mapping`]: () => Response.json(draft(kept)),
+      [`PUT ${ADVERTISER}/mapping`]: async (request) => {
+        kept = await request.json()
+        return Response.json(draft(kept))
+      },
     })
     render(<AdvertiserPage client={service.client} />)
     await nameTheAdvertiser()
     fireEvent.click(screen.getByRole('button', { name: /Review/ }))
-
-    fireEvent.change(await screen.findByLabelText('Column holding the CRM stage'), {
-      target: { value: 'Stage' },
+    fireEvent.change(await screen.findByLabelText('Typical deal size'), {
+      target: { value: '12000' },
     })
+    await screen.findByText('Draft saved.')
 
-    const stages = await screen.findByRole('table', { name: 'CRM stages' })
-    expect(within(stages).getByRole('row', { name: 'New enquiry 98' })).toBeInTheDocument()
-    expect(within(stages).getByRole('row', { name: 'Closed won 19' })).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Upload/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Review/ }))
+
+    expect(await screen.findByLabelText('Typical deal size')).toHaveValue(12000)
+  })
+
+  it('stops offering to replace the files once the mapping is confirmed, and says why', async () => {
+    const confirmed = { ...BOTH_UPLOADED, mapping_confirmed_at: '2026-09-20T16:30:00Z' }
+    const service = fakeService({
+      'POST /advertisers': () => Response.json(BOTH_UPLOADED, { status: 201 }),
+      [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json(LEADS_COLUMNS),
+      [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json(STAGE_HISTORY_COLUMNS),
+      [`GET ${ADVERTISER}/mapping`]: () =>
+        Response.json({
+          mapping: { leads: {}, stage_history: {} },
+          confirmed_at: null,
+          problems: [],
+          crm_stages: [],
+          ...CHOICES,
+        }),
+      [`POST ${ADVERTISER}/mapping/confirmation`]: () =>
+        Response.json({
+          mapping: { leads: {}, stage_history: {} },
+          confirmed_at: '2026-09-20T16:30:00Z',
+          problems: [],
+          crm_stages: [],
+          ...CHOICES,
+        }),
+      [`GET ${ADVERTISER}`]: () => Response.json(confirmed),
+    })
+    render(<AdvertiserPage client={service.client} />)
+    await nameTheAdvertiser()
+    expect(screen.getByLabelText('Replace the leads file')).toBeInTheDocument()
+    fireEvent.click(screen.getByRole('button', { name: /Review/ }))
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm the mapping' }))
+    await screen.findByRole('status', { name: 'Mapping confirmed' })
+
+    fireEvent.click(screen.getByRole('button', { name: /Upload/ }))
+
+    const panel = await screen.findByRole('region', { name: 'Leads file' })
+    expect(
+      await within(panel).findByText(
+        'The mapping is confirmed, so this file can no longer be replaced.',
+      ),
+    ).toBeInTheDocument()
+    expect(screen.queryByLabelText('Replace the leads file')).not.toBeInTheDocument()
   })
 })

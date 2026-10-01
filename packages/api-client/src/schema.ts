@@ -33,26 +33,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/advertisers/{advertiser_id}/files/stage-history/crm-stages": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Crm Stages
-         * @description Every distinct CRM stage name in the column, with how many rows use it.
-         */
-        get: operations["getCrmStages"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/advertisers/{advertiser_id}/files/{kind}": {
         parameters: {
             query?: never;
@@ -93,6 +73,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/advertisers/{advertiser_id}/mapping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Mapping
+         * @description The mapping as last saved (an empty draft at first), with what stops it being confirmed.
+         */
+        get: operations["getMapping"];
+        /**
+         * Save Mapping
+         * @description Keep the draft as it stands; refused once the mapping is confirmed.
+         */
+        put: operations["saveMapping"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/advertisers/{advertiser_id}/mapping/confirmation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Mapping
+         * @description Confirm the saved draft, recording when; refused while it has problems.
+         */
+        post: operations["confirmMapping"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -123,6 +147,11 @@ export interface components {
              */
             id: string;
             leads_file: components["schemas"]["FileProfile"] | null;
+            /**
+             * Mapping Confirmed At
+             * @description When the mapping was confirmed; from then on the files cannot be replaced
+             */
+            mapping_confirmed_at: string | null;
             /** Name */
             name: string;
             /**
@@ -142,6 +171,12 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * ColumnKind
+         * @description How an input column is read: as a number, or as one of a set of categories.
+         * @enum {string}
+         */
+        ColumnKind: "number" | "category";
         /** CrmStage */
         CrmStage: {
             /** Name */
@@ -188,6 +223,118 @@ export interface components {
              */
             status: "ok";
         };
+        /** InputKindChoice */
+        InputKindChoice: {
+            kind: components["schemas"]["ColumnKind"];
+            /** Label */
+            label: string;
+        };
+        /**
+         * LeadsColumns
+         * @description Which leads-file column holds what. Every column not marked here is dropped.
+         */
+        LeadsColumns: {
+            /**
+             * Email
+             * @description The lead's email, to be scrambled
+             */
+            email?: string | null;
+            /**
+             * Inputs
+             * @description The inputs to the score, each read as its kind
+             */
+            inputs?: {
+                [key: string]: components["schemas"]["ColumnKind"];
+            };
+            /** Lead Id */
+            lead_id?: string | null;
+            /**
+             * Name
+             * @description The lead's name, to be removed
+             */
+            name?: string | null;
+            /**
+             * Phone
+             * @description The lead's phone, to be scrambled
+             */
+            phone?: string | null;
+            /**
+             * Submitted At
+             * @description When the lead was submitted
+             */
+            submitted_at?: string | null;
+        };
+        /**
+         * LeadsRole
+         * @description What a leads-file column can hold besides an input; each is a field of LeadsColumns.
+         * @enum {string}
+         */
+        LeadsRole: "lead_id" | "submitted_at" | "name" | "email" | "phone";
+        /** LeadsRoleChoice */
+        LeadsRoleChoice: {
+            /** Label */
+            label: string;
+            role: components["schemas"]["LeadsRole"];
+        };
+        /** Mapping */
+        Mapping: {
+            /**
+             * Crm Stages
+             * @description Where each CRM stage name sits: a Stage, or Lost
+             */
+            crm_stages?: {
+                [key: string]: components["schemas"]["StageOrLost"];
+            };
+            /**
+             * @default {
+             *       "inputs": {}
+             *     }
+             */
+            leads: components["schemas"]["LeadsColumns"];
+            /** @default {} */
+            stage_history: components["schemas"]["StageHistoryColumns"];
+            /** Typical Deal Size */
+            typical_deal_size?: number | null;
+        };
+        /** MappingReview */
+        MappingReview: {
+            /**
+             * Confirmed At
+             * @description When a person confirmed it; null in draft
+             */
+            confirmed_at: string | null;
+            /**
+             * Crm Stages
+             * @description Every CRM stage name in the column marked as the CRM stage, most used first
+             */
+            crm_stages: components["schemas"]["CrmStage"][];
+            /**
+             * Input Kinds
+             * @description How an input column can be read
+             */
+            input_kinds: components["schemas"]["InputKindChoice"][];
+            /**
+             * Leads Roles
+             * @description What a leads-file column can hold
+             */
+            leads_roles: components["schemas"]["LeadsRoleChoice"][];
+            mapping: components["schemas"]["Mapping"];
+            /**
+             * Problems
+             * @description Why it cannot be confirmed yet; empty once it can
+             */
+            problems: string[];
+            /**
+             * Stage History Roles
+             * @description What a stage-history column can hold
+             */
+            stage_history_roles: components["schemas"]["StageHistoryRoleChoice"][];
+            /**
+             * Stages And Lost
+             * @description What a CRM stage can be placed on: the Canonical ladder in order, then Lost
+             */
+            stages_and_lost: components["schemas"]["StageOrLostChoice"][];
+        };
         /** NewAdvertiser */
         NewAdvertiser: {
             data_source: components["schemas"]["DataSource"];
@@ -198,6 +345,45 @@ export interface components {
         Problem: {
             /** Detail */
             detail: string;
+        };
+        /**
+         * Stage
+         * @description A Stage of the Canonical ladder; members are in ladder order.
+         * @enum {string}
+         */
+        Stage: "submitted" | "contact_attempted" | "engaged" | "qualified" | "proposal" | "won";
+        /** StageHistoryColumns */
+        StageHistoryColumns: {
+            /**
+             * Changed At
+             * @description When the change of CRM stage happened
+             */
+            changed_at?: string | null;
+            /** Crm Stage */
+            crm_stage?: string | null;
+            /** Deal Value */
+            deal_value?: string | null;
+            /** Lead Id */
+            lead_id?: string | null;
+        };
+        /**
+         * StageHistoryRole
+         * @description What a stage-history column can hold; each is a field of StageHistoryColumns.
+         * @enum {string}
+         */
+        StageHistoryRole: "lead_id" | "crm_stage" | "changed_at" | "deal_value";
+        /** StageHistoryRoleChoice */
+        StageHistoryRoleChoice: {
+            /** Label */
+            label: string;
+            role: components["schemas"]["StageHistoryRole"];
+        };
+        StageOrLost: components["schemas"]["Stage"] | "lost";
+        /** StageOrLostChoice */
+        StageOrLostChoice: {
+            /** Name */
+            name: string;
+            value: components["schemas"]["StageOrLost"];
         };
         /** ValidationError */
         ValidationError: {
@@ -294,67 +480,6 @@ export interface operations {
             };
         };
     };
-    getCrmStages: {
-        parameters: {
-            query: {
-                /** @description The stage-history column holding the CRM stage */
-                column: string;
-            };
-            header?: never;
-            path: {
-                advertiser_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CrmStage"][];
-                };
-            };
-            /** @description No such column */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Stored file unreadable */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     uploadFile: {
         parameters: {
             query: {
@@ -400,7 +525,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Another upload won */
+            /** @description Another upload won, or the mapping is confirmed */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -469,6 +594,157 @@ export interface operations {
                 };
             };
             /** @description Stored file unreadable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getMapping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                advertiser_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MappingReview"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Stored file unreadable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    saveMapping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                advertiser_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Mapping"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MappingReview"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Already confirmed, or a stored file is unreadable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirmMapping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                advertiser_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MappingReview"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not confirmable yet, already confirmed, or a stored file unreadable */
             409: {
                 headers: {
                     [name: string]: unknown;

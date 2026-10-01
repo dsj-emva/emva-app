@@ -240,56 +240,15 @@ def test_a_replacement_that_cannot_be_saved_keeps_the_earlier_file(
     assert stored_objects(bucket, advertiser) == [LEADS]
 
 
-def test_lists_every_crm_stage_name_in_the_chosen_column_with_its_row_count(client: TestClient):
-    advertiser = create_advertiser(client)
-    upload(client, advertiser, "stage-history", STAGE_HISTORY, "history.csv")
-
-    response = client.get(
-        f"/advertisers/{advertiser}/files/stage-history/crm-stages", params={"column": "Stage"}
-    )
-
-    assert response.status_code == 200
-    assert response.json() == [
-        {"name": "New enquiry", "row_count": 2},
-        {"name": "Quote sent", "row_count": 1},
-    ]
-
-
-def test_crm_stages_need_a_column_the_stage_history_file_has(client: TestClient):
-    advertiser = create_advertiser(client)
-    upload(client, advertiser, "stage-history", STAGE_HISTORY, "history.csv")
-
-    response = client.get(
-        f"/advertisers/{advertiser}/files/stage-history/crm-stages", params={"column": "Status"}
-    )
-
-    assert response.status_code == 400
-    assert response.json() == {"detail": "The stage-history file has no column 'Status'."}
-
-
-def test_crm_stages_need_the_stage_history_file(client: TestClient):
-    advertiser = create_advertiser(client)
-
-    response = client.get(
-        f"/advertisers/{advertiser}/files/stage-history/crm-stages", params={"column": "Stage"}
-    )
-
-    assert response.status_code == 404
-
-
 def test_a_stored_file_that_can_no_longer_be_read_is_reported(client: TestClient, bucket):
     advertiser = create_advertiser(client)
     upload(client, advertiser, "stage-history", STAGE_HISTORY, "history.csv")
     [stored] = bucket.objects.filter(Prefix=f"advertisers/{advertiser}/")
     bucket.put_object(Key=stored.key, Body=b"")
 
-    columns = client.get(f"/advertisers/{advertiser}/files/stage-history/columns")
-    stages = client.get(
-        f"/advertisers/{advertiser}/files/stage-history/crm-stages", params={"column": "Stage"}
-    )
+    response = client.get(f"/advertisers/{advertiser}/files/stage-history/columns")
 
-    for response in (columns, stages):
-        assert response.status_code == 409
-        assert response.json() == {
-            "detail": "The stored stage-history file can no longer be read. Upload it again."
-        }
+    assert response.status_code == 409
+    assert response.json() == {
+        "detail": "The stored stage-history file can no longer be read. Upload it again."
+    }

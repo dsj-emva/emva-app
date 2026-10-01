@@ -21,6 +21,19 @@
               }
             ]
           },
+          "mapping_confirmed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the mapping was confirmed; from then on the files cannot be replaced",
+            "title": "Mapping Confirmed At"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -47,7 +60,8 @@
           "data_source",
           "leads_file",
           "stage_history_file",
-          "review_available"
+          "review_available",
+          "mapping_confirmed_at"
         ],
         "title": "Advertiser",
         "type": "object"
@@ -73,6 +87,15 @@
         ],
         "title": "Column",
         "type": "object"
+      },
+      "ColumnKind": {
+        "description": "How an input column is read: as a number, or as one of a set of categories.",
+        "enum": [
+          "number",
+          "category"
+        ],
+        "title": "ColumnKind",
+        "type": "string"
       },
       "CrmStage": {
         "properties": {
@@ -174,6 +197,241 @@
         "title": "Health",
         "type": "object"
       },
+      "InputKindChoice": {
+        "properties": {
+          "kind": {
+            "$ref": "#/components/schemas/ColumnKind"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "label"
+        ],
+        "title": "InputKindChoice",
+        "type": "object"
+      },
+      "LeadsColumns": {
+        "description": "Which leads-file column holds what. Every column not marked here is dropped.",
+        "properties": {
+          "email": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The lead's email, to be scrambled",
+            "title": "Email"
+          },
+          "inputs": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/ColumnKind"
+            },
+            "description": "The inputs to the score, each read as its kind",
+            "title": "Inputs",
+            "type": "object"
+          },
+          "lead_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lead Id"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The lead's name, to be removed",
+            "title": "Name"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The lead's phone, to be scrambled",
+            "title": "Phone"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the lead was submitted",
+            "title": "Submitted At"
+          }
+        },
+        "title": "LeadsColumns",
+        "type": "object"
+      },
+      "LeadsRole": {
+        "description": "What a leads-file column can hold besides an input; each is a field of LeadsColumns.",
+        "enum": [
+          "lead_id",
+          "submitted_at",
+          "name",
+          "email",
+          "phone"
+        ],
+        "title": "LeadsRole",
+        "type": "string"
+      },
+      "LeadsRoleChoice": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/LeadsRole"
+          }
+        },
+        "required": [
+          "role",
+          "label"
+        ],
+        "title": "LeadsRoleChoice",
+        "type": "object"
+      },
+      "Mapping": {
+        "properties": {
+          "crm_stages": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/StageOrLost"
+            },
+            "description": "Where each CRM stage name sits: a Stage, or Lost",
+            "title": "Crm Stages",
+            "type": "object"
+          },
+          "leads": {
+            "$ref": "#/components/schemas/LeadsColumns",
+            "default": {
+              "inputs": {}
+            }
+          },
+          "stage_history": {
+            "$ref": "#/components/schemas/StageHistoryColumns",
+            "default": {}
+          },
+          "typical_deal_size": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Typical Deal Size"
+          }
+        },
+        "title": "Mapping",
+        "type": "object"
+      },
+      "MappingReview": {
+        "properties": {
+          "confirmed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When a person confirmed it; null in draft",
+            "title": "Confirmed At"
+          },
+          "crm_stages": {
+            "description": "Every CRM stage name in the column marked as the CRM stage, most used first",
+            "items": {
+              "$ref": "#/components/schemas/CrmStage"
+            },
+            "title": "Crm Stages",
+            "type": "array"
+          },
+          "input_kinds": {
+            "description": "How an input column can be read",
+            "items": {
+              "$ref": "#/components/schemas/InputKindChoice"
+            },
+            "title": "Input Kinds",
+            "type": "array"
+          },
+          "leads_roles": {
+            "description": "What a leads-file column can hold",
+            "items": {
+              "$ref": "#/components/schemas/LeadsRoleChoice"
+            },
+            "title": "Leads Roles",
+            "type": "array"
+          },
+          "mapping": {
+            "$ref": "#/components/schemas/Mapping"
+          },
+          "problems": {
+            "description": "Why it cannot be confirmed yet; empty once it can",
+            "items": {
+              "type": "string"
+            },
+            "title": "Problems",
+            "type": "array"
+          },
+          "stage_history_roles": {
+            "description": "What a stage-history column can hold",
+            "items": {
+              "$ref": "#/components/schemas/StageHistoryRoleChoice"
+            },
+            "title": "Stage History Roles",
+            "type": "array"
+          },
+          "stages_and_lost": {
+            "description": "What a CRM stage can be placed on: the Canonical ladder in order, then Lost",
+            "items": {
+              "$ref": "#/components/schemas/StageOrLostChoice"
+            },
+            "title": "Stages And Lost",
+            "type": "array"
+          }
+        },
+        "required": [
+          "mapping",
+          "confirmed_at",
+          "problems",
+          "crm_stages",
+          "leads_roles",
+          "stage_history_roles",
+          "input_kinds",
+          "stages_and_lost"
+        ],
+        "title": "MappingReview",
+        "type": "object"
+      },
       "NewAdvertiser": {
         "properties": {
           "data_source": {
@@ -204,6 +462,126 @@
           "detail"
         ],
         "title": "Problem",
+        "type": "object"
+      },
+      "Stage": {
+        "description": "A Stage of the Canonical ladder; members are in ladder order.",
+        "enum": [
+          "submitted",
+          "contact_attempted",
+          "engaged",
+          "qualified",
+          "proposal",
+          "won"
+        ],
+        "title": "Stage",
+        "type": "string"
+      },
+      "StageHistoryColumns": {
+        "properties": {
+          "changed_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the change of CRM stage happened",
+            "title": "Changed At"
+          },
+          "crm_stage": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Crm Stage"
+          },
+          "deal_value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deal Value"
+          },
+          "lead_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Lead Id"
+          }
+        },
+        "title": "StageHistoryColumns",
+        "type": "object"
+      },
+      "StageHistoryRole": {
+        "description": "What a stage-history column can hold; each is a field of StageHistoryColumns.",
+        "enum": [
+          "lead_id",
+          "crm_stage",
+          "changed_at",
+          "deal_value"
+        ],
+        "title": "StageHistoryRole",
+        "type": "string"
+      },
+      "StageHistoryRoleChoice": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/StageHistoryRole"
+          }
+        },
+        "required": [
+          "role",
+          "label"
+        ],
+        "title": "StageHistoryRoleChoice",
+        "type": "object"
+      },
+      "StageOrLost": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Stage"
+          },
+          {
+            "const": "lost",
+            "type": "string"
+          }
+        ]
+      },
+      "StageOrLostChoice": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/StageOrLost"
+          }
+        },
+        "required": [
+          "value",
+          "name"
+        ],
+        "title": "StageOrLostChoice",
         "type": "object"
       },
       "ValidationError": {
@@ -342,92 +720,6 @@
         "summary": "Get Advertiser"
       }
     },
-    "/advertisers/{advertiser_id}/files/stage-history/crm-stages": {
-      "get": {
-        "description": "Every distinct CRM stage name in the column, with how many rows use it.",
-        "operationId": "getCrmStages",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "advertiser_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Advertiser Id",
-              "type": "string"
-            }
-          },
-          {
-            "description": "The stage-history column holding the CRM stage",
-            "in": "query",
-            "name": "column",
-            "required": true,
-            "schema": {
-              "description": "The stage-history column holding the CRM stage",
-              "title": "Column",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "items": {
-                    "$ref": "#/components/schemas/CrmStage"
-                  },
-                  "title": "Response Getcrmstages",
-                  "type": "array"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "400": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            },
-            "description": "No such column"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            },
-            "description": "Not Found"
-          },
-          "409": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            },
-            "description": "Stored file unreadable"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Get Crm Stages"
-      }
-    },
     "/advertisers/{advertiser_id}/files/{kind}": {
       "put": {
         "description": "Upload the file, replacing any earlier upload of the same kind.",
@@ -513,7 +805,7 @@
                 }
               }
             },
-            "description": "Another upload won"
+            "description": "Another upload won, or the mapping is confirmed"
           },
           "413": {
             "content": {
@@ -620,6 +912,197 @@
           }
         },
         "summary": "Get Columns"
+      }
+    },
+    "/advertisers/{advertiser_id}/mapping": {
+      "get": {
+        "description": "The mapping as last saved (an empty draft at first), with what stops it being confirmed.",
+        "operationId": "getMapping",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "advertiser_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Advertiser Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingReview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stored file unreadable"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Mapping"
+      },
+      "put": {
+        "description": "Keep the draft as it stands; refused once the mapping is confirmed.",
+        "operationId": "saveMapping",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "advertiser_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Advertiser Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Mapping"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingReview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Already confirmed, or a stored file is unreadable"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Save Mapping"
+      }
+    },
+    "/advertisers/{advertiser_id}/mapping/confirmation": {
+      "post": {
+        "description": "Confirm the saved draft, recording when; refused while it has problems.",
+        "operationId": "confirmMapping",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "advertiser_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Advertiser Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MappingReview"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not confirmable yet, already confirmed, or a stored file unreadable"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Confirm Mapping"
       }
     },
     "/health": {
