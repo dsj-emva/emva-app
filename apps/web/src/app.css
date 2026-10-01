@@ -551,6 +551,33 @@ tr:has(select) > * {
   margin: 0;
 }
 
+.still-to-do {
+  display: grid;
+  gap: var(--space-2);
+  justify-items: start;
+  padding: var(--space-3) var(--space-4);
+  border: 2px solid var(--color-accent);
+}
+
+.still-to-do h3 {
+  margin: 0;
+  font-size: 1.25rem;
+}
+
+.still-to-do p {
+  margin: 0;
+}
+
+.times {
+  padding-top: var(--space-3);
+  border-top: 2px solid var(--color-rule);
+}
+
+.times .muted {
+  margin: var(--space-1) 0 0;
+  font-size: 0.875rem;
+}
+
 .formatted {
   display: grid;
   gap: var(--space-3);

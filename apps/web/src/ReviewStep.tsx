@@ -5,7 +5,10 @@ import { refusal, UNREACHABLE } from './service-errors.ts'
 import { FILES } from './uploaded-files.ts'
 
 type Advertiser = components['schemas']['Advertiser']
-type FormattingSummary = components['schemas']['FormattingSummary']
+type Summary = components['schemas']['Summary']
+type StageOrLostChoice = components['schemas']['StageOrLostChoice']
+type DateOrder = components['schemas']['DateOrder']
+type DateOrderChoice = components['schemas']['DateOrderChoice']
 type Column = components['schemas']['Column']
 type ColumnKind = components['schemas']['ColumnKind']
 type FileKind = components['schemas']['FileKind']
@@ -29,11 +32,12 @@ type Saving = { state: 'saved' } | { state: 'saving' } | { state: 'failed'; prob
 export function ReviewStep({
   client,
   advertiser,
-  onConfirmed,
+  onChanged,
 }: {
   client: ApiClient
   advertiser: Advertiser
-  onConfirmed: () => void
+  // Called after confirming, which changes the advertiser (its files, once deleted).
+  onChanged: () => void
 }) {
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' })
   const [saving, setSaving] = useState<Saving>({ state: 'saved' })
@@ -112,6 +116,8 @@ export function ReviewStep({
     typing.current = { flush, timer: setTimeout(flush, TYPING_PAUSE_MS) }
   }
 
+  // Confirming may stop part-way (formatted, but a raw file not yet deleted), so whatever it
+  // answers, the mapping and the advertiser are read again as the service now has them.
   async function confirm() {
     setConfirming(true)
     setConfirmProblem(null)
@@ -120,14 +126,17 @@ export function ReviewStep({
         '/advertisers/{advertiser_id}/mapping/confirmation',
         path,
       )
-      if (data) {
-        setLoaded({ state: 'loaded', review: data, mapping: data.mapping })
-        onConfirmed()
-      } else setConfirmProblem(refusal(error, response))
+      if (data) setLoaded({ state: 'loaded', review: data, mapping: data.mapping })
+      else {
+        setConfirmProblem(refusal(error, response))
+        const now = await client.GET('/advertisers/{advertiser_id}/mapping', path)
+        if (now.data) setLoaded({ state: 'loaded', review: now.data, mapping: now.data.mapping })
+      }
     } catch {
       setConfirmProblem(UNREACHABLE)
     } finally {
       setConfirming(false)
+      onChanged()
     }
   }
 
@@ -163,14 +172,28 @@ export function ReviewStep({
   return (
     <div className="review">
       {confirmed && <Confirmed at={review.confirmed_at!} />}
-      {review.formatting && <Formatted summary={review.formatting} />}
+      {review.still_to_do && (
+        <StillToDo
+          what={review.still_to_do}
+          confirming={confirming}
+          problem={confirmProblem}
+          finish={confirm}
+        />
+      )}
+      {review.formatting && (
+        <Formatted
+          summary={review.formatting}
+          stages={review.stages_and_lost}
+          rawFilesDeleted={review.still_to_do === null}
+        />
+      )}
       <fieldset className="mapping" disabled={confirmed}>
         <legend className="visually-hidden">Mapping</legend>
         {advertiser.leads_file && (
           <FileColumns
             client={client}
             advertiserId={advertiser.id}
-            rawDeleted={confirmed}
+            rawDeleted={!advertiser.leads_file.raw_kept}
             kind="leads"
             label="Leads file"
             file={advertiser.leads_file}
@@ -203,7 +226,7 @@ export function ReviewStep({
           <FileColumns
             client={client}
             advertiserId={advertiser.id}
-            rawDeleted={confirmed}
+            rawDeleted={!advertiser.stage_history_file.raw_kept}
             kind="stage-history"
             label="Stage-history file"
             file={advertiser.stage_history_file}
@@ -223,6 +246,13 @@ export function ReviewStep({
             <CrmStages review={review} placed={placed} place={place} />
           </FileColumns>
         )}
+        <HowTimesAreWritten
+          orders={review.date_orders}
+          order={mapping.date_order ?? null}
+          zone={mapping.time_zone ?? 'UTC'}
+          chooseOrder={(order) => change({ ...mapping, date_order: order })}
+          chooseZone={(zone) => change({ ...mapping, time_zone: zone }, { typed: true })}
+        />
         <TypicalDealSize
           size={mapping.typical_deal_size ?? null}
           choose={(size) => change({ ...mapping, typical_deal_size: size }, { typed: true })}
@@ -253,22 +283,61 @@ function Confirmed({ at }: { at: string }) {
   )
 }
 
-function Formatted({ summary }: { summary: FormattingSummary }) {
+function StillToDo({
+  what,
+  confirming,
+  problem,
+  finish,
+}: {
+  what: string
+  confirming: boolean
+  problem: string | null
+  finish: () => void
+}) {
+  const headingId = useId()
+  return (
+    <section className="still-to-do" aria-labelledby={headingId}>
+      <h3 id={headingId}>Confirming is not finished</h3>
+      <p>{what}</p>
+      <button type="button" className="primary" disabled={confirming} onClick={finish}>
+        {confirming ? 'Finishing…' : 'Finish confirming'}
+      </button>
+      {problem && (
+        <p className="problem" role="alert">
+          {problem}
+        </p>
+      )}
+    </section>
+  )
+}
+
+function Formatted({
+  summary,
+  stages,
+  rawFilesDeleted,
+}: {
+  summary: Summary
+  stages: StageOrLostChoice[]
+  rawFilesDeleted: boolean
+}) {
   const headingId = useId()
   const countsId = useId()
+  const nameOf = (value: StageOrLostChoice['value']) =>
+    stages.find((stage) => stage.value === value)?.name ?? value
   const counts = [
     { label: 'Leads', count: summary.lead_count },
-    { label: 'Won', count: summary.won },
-    { label: 'Lost', count: summary.lost },
-    { label: 'Unfinished', count: summary.unfinished },
-    { label: 'Never reached Contact attempted', count: summary.never_reached_contact_attempted },
+    { label: nameOf('won'), count: summary.won },
+    { label: nameOf('lost'), count: summary.lost },
+    { label: 'No outcome yet', count: summary.no_outcome_yet },
+    { label: 'Neglected leads', count: summary.neglected },
+    { label: 'Phones without a country', count: summary.phones_without_country },
   ]
   return (
     <section className="formatted" aria-labelledby={headingId}>
       <h3 id={headingId}>What was formatted</h3>
       <p className="muted">
-        Names were removed, emails and phones scrambled, every unmarked column dropped, and the raw
-        files deleted.
+        Names were removed, identifiers, emails and phones scrambled, and every unmarked column
+        dropped{rawFilesDeleted ? ', and the raw files deleted.' : '.'}
       </p>
       <p id={countsId} className="visually-hidden">
         Leads by outcome
@@ -281,7 +350,7 @@ function Formatted({ summary }: { summary: FormattingSummary }) {
           </li>
         ))}
       </ul>
-      {summary.unreadable_rows.length === 0 ? (
+      {summary.unreadable.length === 0 ? (
         <p>Every row could be read.</p>
       ) : (
         <div className="table-scroll">
@@ -290,20 +359,23 @@ function Formatted({ summary }: { summary: FormattingSummary }) {
             <thead>
               <tr>
                 <th scope="col">File</th>
-                <th scope="col" className="number">
-                  Row
-                </th>
-                <th scope="col">Lead</th>
                 <th scope="col">Why</th>
+                <th scope="col" className="number">
+                  Rows
+                </th>
+                <th scope="col">First rows</th>
               </tr>
             </thead>
             <tbody>
-              {summary.unreadable_rows.map((row) => (
-                <tr key={`${row.file} ${row.row}`}>
-                  <td>{FILE_LABELS[row.file]}</td>
-                  <td className="number data">{row.row}</td>
-                  <td className="data">{row.lead}</td>
-                  <td>{row.reason}</td>
+              {summary.unreadable.map((rows) => (
+                <tr key={`${rows.file} ${rows.reason}`}>
+                  <td>{FILE_LABELS[rows.file]}</td>
+                  <td>{rows.reason}</td>
+                  <td className="number data">{rows.count}</td>
+                  <td className="data">
+                    {rows.first_rows.join(', ')}
+                    {rows.count > rows.first_rows.length && '…'}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -465,7 +537,7 @@ function FileColumns({
       )}
       {rawDeleted && (
         <p className="muted">
-          The raw files were deleted once they were formatted, so their example values are gone.
+          The raw file was deleted once it was formatted, so its example values are gone.
         </p>
       )}
       {columns.state === 'listed' && (
@@ -570,6 +642,65 @@ function CrmStages({
         </>
       )}
     </div>
+  )
+}
+
+function HowTimesAreWritten({
+  orders,
+  order,
+  zone,
+  chooseOrder,
+  chooseZone,
+}: {
+  orders: DateOrderChoice[]
+  order: DateOrder | null
+  zone: string
+  chooseOrder: (order: DateOrder | null) => void
+  chooseZone: (zone: string) => void
+}) {
+  const orderId = useId()
+  const zoneId = useId()
+  const zoneHintId = useId()
+  const [zoneText, setZoneText] = useState(zone)
+  return (
+    <fieldset className="roles times">
+      <legend>How both files write times</legend>
+      <div className="role-grid">
+        <div className="field">
+          <label htmlFor={orderId}>Date order</label>
+          <select
+            id={orderId}
+            value={order ?? ''}
+            onChange={(event) => chooseOrder((event.target.value || null) as DateOrder | null)}
+          >
+            <option value="">Not picked</option>
+            {orders.map(({ value, label }) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor={zoneId}>Time zone</label>
+          <input
+            id={zoneId}
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            aria-describedby={zoneHintId}
+            value={zoneText}
+            onChange={(event) => {
+              setZoneText(event.target.value)
+              chooseZone(event.target.value)
+            }}
+          />
+          <p id={zoneHintId} className="muted">
+            Times written without a zone are read in it, such as Europe/London or UTC.
+          </p>
+        </div>
+      </div>
+    </fieldset>
   )
 }
 
