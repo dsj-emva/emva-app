@@ -1,38 +1,315 @@
 import type { ApiClient, components } from '@emva/api-client'
-import { type ReactNode, useEffect, useId, useState } from 'react'
+import { type ReactNode, useEffect, useId, useRef, useState } from 'react'
 
 import { refusal, UNREACHABLE } from './service-errors.ts'
-import { FILES, fileOf } from './uploaded-files.ts'
 
 type Advertiser = components['schemas']['Advertiser']
 type Column = components['schemas']['Column']
-type CrmStage = components['schemas']['CrmStage']
+type ColumnKind = components['schemas']['ColumnKind']
 type FileKind = components['schemas']['FileKind']
 type FileProfile = components['schemas']['FileProfile']
+type Mapping = components['schemas']['Mapping']
+type MappingReview = components['schemas']['MappingReview']
+type LeadsColumns = components['schemas']['LeadsColumns']
+type StageHistoryColumns = components['schemas']['StageHistoryColumns']
+type Place = components['schemas']['Place']
+
+const LEADS_ROLES: { role: keyof Omit<LeadsColumns, 'inputs'>; label: string }[] = [
+  { role: 'lead_id', label: 'Lead identifier' },
+  { role: 'submitted_at', label: 'Submission time' },
+  { role: 'name', label: 'Name (removed)' },
+  { role: 'email', label: 'Email (scrambled)' },
+  { role: 'phone', label: 'Phone (scrambled)' },
+]
+
+const STAGE_HISTORY_ROLES: { role: keyof StageHistoryColumns; label: string }[] = [
+  { role: 'lead_id', label: 'Lead identifier' },
+  { role: 'crm_stage', label: 'CRM stage' },
+  { role: 'changed_at', label: 'When the change happened' },
+  { role: 'deal_value', label: 'Deal value' },
+]
+
+const INPUT_KINDS: { kind: ColumnKind; label: string }[] = [
+  { kind: 'number', label: 'Number' },
+  { kind: 'category', label: 'Category' },
+]
+
+type Loaded =
+  | { state: 'loading' }
+  | { state: 'failed'; problem: string }
+  | { state: 'loaded'; review: MappingReview; mapping: Mapping }
+
+type Saving = { state: 'saved' } | { state: 'saving' } | { state: 'failed'; problem: string }
 
 export function ReviewStep({ client, advertiser }: { client: ApiClient; advertiser: Advertiser }) {
+  const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' })
+  const [saving, setSaving] = useState<Saving>({ state: 'saved' })
+  const [confirming, setConfirming] = useState(false)
+  const [confirmProblem, setConfirmProblem] = useState<string | null>(null)
+  const sending = useRef(false)
+  const queued = useRef<Mapping | null>(null)
+  const path = { params: { path: { advertiser_id: advertiser.id } } }
+
+  useEffect(() => {
+    client
+      .GET('/advertisers/{advertiser_id}/mapping', {
+        params: { path: { advertiser_id: advertiser.id } },
+      })
+      .then(({ data, error, response }) =>
+        setLoaded(
+          data
+            ? { state: 'loaded', review: data, mapping: data.mapping }
+            : { state: 'failed', problem: refusal(error, response) },
+        ),
+      )
+      .catch(() => setLoaded({ state: 'failed', problem: UNREACHABLE }))
+  }, [client, advertiser.id])
+
+  // Drafts are sent one at a time, newest last, so the service always keeps the latest.
+  async function save(draft: Mapping) {
+    queued.current = draft
+    if (sending.current) return
+    sending.current = true
+    setSaving({ state: 'saving' })
+    let outcome: Saving = { state: 'saved' }
+    while (queued.current) {
+      const body = queued.current
+      queued.current = null
+      try {
+        const { data, error, response } = await client.PUT('/advertisers/{advertiser_id}/mapping', {
+          ...path,
+          body,
+        })
+        if (data) {
+          outcome = { state: 'saved' }
+          const latest = queued.current === null
+          if (latest) setLoaded((now) => (now.state === 'loaded' ? { ...now, review: data } : now))
+        } else {
+          outcome = { state: 'failed', problem: refusal(error, response) }
+        }
+      } catch {
+        outcome = { state: 'failed', problem: UNREACHABLE }
+      }
+    }
+    sending.current = false
+    setSaving(outcome)
+  }
+
+  function change(draft: Mapping) {
+    setLoaded((now) => (now.state === 'loaded' ? { ...now, mapping: draft } : now))
+    void save(draft)
+  }
+
+  async function confirm() {
+    setConfirming(true)
+    setConfirmProblem(null)
+    try {
+      const { data, error, response } = await client.POST(
+        '/advertisers/{advertiser_id}/mapping/confirmation',
+        path,
+      )
+      if (data) setLoaded({ state: 'loaded', review: data, mapping: data.mapping })
+      else setConfirmProblem(refusal(error, response))
+    } catch {
+      setConfirmProblem(UNREACHABLE)
+    } finally {
+      setConfirming(false)
+    }
+  }
+
+  if (loaded.state === 'loading') return <p className="muted">Reading the mapping…</p>
+  if (loaded.state === 'failed')
+    return (
+      <p className="problem" role="alert">
+        {loaded.problem}
+      </p>
+    )
+
+  const { review, mapping } = loaded
+  const confirmed = review.confirmed_at !== null
+  const leads = mapping.leads
+  const history = mapping.stage_history
+  const inputs = leads.inputs ?? {}
+  const placed = mapping.crm_stages ?? {}
+
+  function setLeads(next: Partial<LeadsColumns>) {
+    change({ ...mapping, leads: { ...leads, ...next } })
+  }
+
+  function setInput(column: string, kind: ColumnKind | '') {
+    const { [column]: _dropped, ...others } = inputs
+    setLeads({ inputs: kind ? { ...others, [column]: kind } : others })
+  }
+
+  function place(name: string, where: Place | '') {
+    const { [name]: _dropped, ...others } = placed
+    change({ ...mapping, crm_stages: where ? { ...others, [name]: where } : others })
+  }
+
   return (
     <div className="review">
-      {FILES.map(({ kind, label }) => {
-        const file = fileOf(advertiser, kind)
-        return (
-          file && (
-            <FileColumns
-              key={`${kind} ${file.uploaded_at}`}
-              client={client}
-              advertiserId={advertiser.id}
-              kind={kind}
-              label={label}
-              file={file}
-            >
-              {kind === 'stage-history' && (
-                <CrmStages client={client} advertiserId={advertiser.id} file={file} />
-              )}
-            </FileColumns>
-          )
-        )
-      })}
+      {confirmed && <Confirmed at={review.confirmed_at!} />}
+      <fieldset className="mapping" disabled={confirmed}>
+        <legend className="visually-hidden">Mapping</legend>
+        {advertiser.leads_file && (
+          <FileColumns
+            client={client}
+            advertiserId={advertiser.id}
+            kind="leads"
+            label="Leads file"
+            file={advertiser.leads_file}
+            roles={
+              <RoleChoices
+                legend="What the leads file's columns hold"
+                hint="Every column not marked here, and not an input to the score, is dropped."
+                columns={advertiser.leads_file.column_names}
+                roles={LEADS_ROLES.map(({ role, label }) => ({
+                  label,
+                  value: leads[role] ?? null,
+                  choose: (column) => setLeads({ [role]: column }),
+                }))}
+              />
+            }
+            columnControl={{
+              heading: 'Input to the score',
+              control: (column) => (
+                <InputKind
+                  column={column}
+                  kind={inputs[column] ?? ''}
+                  choose={(kind) => setInput(column, kind)}
+                />
+              ),
+            }}
+          />
+        )}
+        {advertiser.stage_history_file && (
+          <FileColumns
+            client={client}
+            advertiserId={advertiser.id}
+            kind="stage-history"
+            label="Stage-history file"
+            file={advertiser.stage_history_file}
+            roles={
+              <RoleChoices
+                legend="What the stage-history file's columns hold"
+                columns={advertiser.stage_history_file.column_names}
+                roles={STAGE_HISTORY_ROLES.map(({ role, label }) => ({
+                  label,
+                  value: history[role] ?? null,
+                  choose: (column) =>
+                    change({ ...mapping, stage_history: { ...history, [role]: column } }),
+                }))}
+              />
+            }
+          >
+            <CrmStages review={review} placed={placed} place={place} />
+          </FileColumns>
+        )}
+        <TypicalDealSize
+          size={mapping.typical_deal_size ?? null}
+          choose={(size) => change({ ...mapping, typical_deal_size: size })}
+        />
+      </fieldset>
+      {!confirmed && (
+        <Confirmation
+          problems={review.problems}
+          saving={saving}
+          confirming={confirming}
+          problem={confirmProblem}
+          confirm={confirm}
+        />
+      )}
     </div>
+  )
+}
+
+function Confirmed({ at }: { at: string }) {
+  const headingId = useId()
+  return (
+    <section className="confirmed" role="status" aria-labelledby={headingId}>
+      <h3 id={headingId}>Mapping confirmed</h3>
+      <p>
+        Confirmed <time dateTime={at}>{formatTime(at)}</time>. The mapping can no longer be changed.
+      </p>
+    </section>
+  )
+}
+
+function RoleChoices({
+  legend,
+  hint,
+  columns,
+  roles,
+}: {
+  legend: string
+  hint?: string
+  columns: string[]
+  roles: { label: string; value: string | null; choose: (column: string | null) => void }[]
+}) {
+  return (
+    <fieldset className="roles">
+      <legend>{legend}</legend>
+      {hint && <p className="muted">{hint}</p>}
+      <div className="role-grid">
+        {roles.map((role) => (
+          <ColumnChoice key={role.label} columns={columns} {...role} />
+        ))}
+      </div>
+    </fieldset>
+  )
+}
+
+function ColumnChoice({
+  label,
+  columns,
+  value,
+  choose,
+}: {
+  label: string
+  columns: string[]
+  value: string | null
+  choose: (column: string | null) => void
+}) {
+  const id = useId()
+  // A column the draft names that the file no longer has stays visible until it is changed.
+  const offered = value === null || columns.includes(value) ? columns : [...columns, value]
+  return (
+    <div className="field">
+      <label htmlFor={id}>{label}</label>
+      <select id={id} value={value ?? ''} onChange={(event) => choose(event.target.value || null)}>
+        <option value="">Not marked</option>
+        {offered.map((name) => (
+          <option key={name} value={name}>
+            {name}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+function InputKind({
+  column,
+  kind,
+  choose,
+}: {
+  column: string
+  kind: ColumnKind | ''
+  choose: (kind: ColumnKind | '') => void
+}) {
+  return (
+    <select
+      aria-label={`“${column}” as an input`}
+      value={kind}
+      onChange={(event) => choose(event.target.value as ColumnKind | '')}
+    >
+      <option value="">Not an input</option>
+      {INPUT_KINDS.map(({ kind: value, label }) => (
+        <option key={value} value={value}>
+          {label}
+        </option>
+      ))}
+    </select>
   )
 }
 
@@ -47,6 +324,8 @@ function FileColumns({
   kind,
   label,
   file,
+  roles,
+  columnControl,
   children,
 }: {
   client: ApiClient
@@ -54,6 +333,8 @@ function FileColumns({
   kind: FileKind
   label: string
   file: FileProfile
+  roles: ReactNode
+  columnControl?: { heading: string; control: (column: string) => ReactNode }
   children?: ReactNode
 }) {
   const [columns, setColumns] = useState<Columns>({ state: 'loading' })
@@ -81,6 +362,7 @@ function FileColumns({
         <p className="data">{file.row_count} rows</p>
         <p className="data">{file.column_names.length} columns</p>
       </header>
+      {roles}
       {columns.state === 'loading' && <p className="muted">Reading the columns…</p>}
       {columns.state === 'failed' && (
         <p className="problem" role="alert">
@@ -94,6 +376,7 @@ function FileColumns({
               <tr>
                 <th scope="col">Column</th>
                 <th scope="col">Example values</th>
+                {columnControl && <th scope="col">{columnControl.heading}</th>}
               </tr>
             </thead>
             <tbody>
@@ -113,6 +396,7 @@ function FileColumns({
                       </ul>
                     )}
                   </td>
+                  {columnControl && <td>{columnControl.control(column.name)}</td>}
                 </tr>
               ))}
             </tbody>
@@ -124,85 +408,160 @@ function FileColumns({
   )
 }
 
-type Stages =
-  | { state: 'unchosen' }
-  | { state: 'loading' }
-  | { state: 'listed'; stages: CrmStage[] }
-  | { state: 'failed'; problem: string }
-
 function CrmStages({
-  client,
-  advertiserId,
-  file,
+  review,
+  placed,
+  place,
 }: {
-  client: ApiClient
-  advertiserId: string
-  file: FileProfile
+  review: MappingReview
+  placed: Record<string, Place>
+  place: (name: string, where: Place | '') => void
 }) {
-  const selectId = useId()
-  const [column, setColumn] = useState('')
-  const [stages, setStages] = useState<Stages>({ state: 'unchosen' })
-
-  async function choose(chosen: string) {
-    setColumn(chosen)
-    if (!chosen) return setStages({ state: 'unchosen' })
-    setStages({ state: 'loading' })
-    try {
-      const { data, error, response } = await client.GET(
-        '/advertisers/{advertiser_id}/files/stage-history/crm-stages',
-        { params: { path: { advertiser_id: advertiserId }, query: { column: chosen } } },
-      )
-      setStages(data ? { state: 'listed', stages: data } : { state: 'failed', problem: refusal(error, response) })
-    } catch {
-      setStages({ state: 'failed', problem: UNREACHABLE })
-    }
-  }
-
   return (
     <div className="crm-stages">
-      <h4>CRM stages</h4>
-      <p className="muted">
-        Pick the column that holds the CRM's own name for each stage to see every name it uses.
-      </p>
-      <div className="field">
-        <label htmlFor={selectId}>Column holding the CRM stage</label>
-        <select id={selectId} value={column} onChange={(event) => choose(event.target.value)}>
-          <option value="">Choose a column</option>
-          {file.column_names.map((name) => (
-            <option key={name} value={name}>
-              {name}
-            </option>
-          ))}
-        </select>
-      </div>
-      {stages.state === 'loading' && <p className="muted">Reading the stage names…</p>}
-      {stages.state === 'failed' && (
-        <p className="problem" role="alert">
-          {stages.problem}
+      <h4>CRM stages on the Canonical ladder</h4>
+      {review.crm_stages.length === 0 ? (
+        <p className="muted">
+          Mark the column holding the CRM stage to see every name the CRM uses.
         </p>
-      )}
-      {stages.state === 'listed' && (
-        <div className="table-scroll">
-          <table aria-label="CRM stages">
-            <thead>
-              <tr>
-                <th scope="col">CRM stage</th>
-                <th scope="col" className="number">
-                  Rows
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {stages.stages.map((stage) => (
-                <tr key={stage.name}>
-                  <th scope="row">{stage.name}</th>
-                  <td className="number data">{stage.row_count}</td>
+      ) : (
+        <>
+          <p className="muted">
+            Place each CRM stage on a stage of the ladder, or on Lost. Several may share a stage.
+          </p>
+          <div className="table-scroll">
+            <table aria-label="CRM stages">
+              <thead>
+                <tr>
+                  <th scope="col">CRM stage</th>
+                  <th scope="col" className="number">
+                    Rows
+                  </th>
+                  <th scope="col">On the ladder</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+              <tbody>
+                {review.crm_stages.map((stage) => (
+                  <tr key={stage.name}>
+                    <th scope="row">{stage.name}</th>
+                    <td className="number data">{stage.row_count}</td>
+                    <td>
+                      <select
+                        aria-label={`“${stage.name}” on the ladder`}
+                        value={placed[stage.name] ?? ''}
+                        onChange={(event) => place(stage.name, event.target.value as Place | '')}
+                      >
+                        <option value="">Not placed</option>
+                        {review.places.map(({ place: value, name }) => (
+                          <option key={value} value={value}>
+                            {name}
+                          </option>
+                        ))}
+                      </select>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
+  )
+}
+
+function TypicalDealSize({
+  size,
+  choose,
+}: {
+  size: number | null
+  choose: (size: number | null) => void
+}) {
+  const id = useId()
+  const hintId = useId()
+  const [text, setText] = useState(size === null ? '' : String(size))
+  return (
+    <section className="deal-size">
+      <div className="field">
+        <label htmlFor={id}>Typical deal size</label>
+        <p id={hintId} className="muted">
+          The size of deal this advertiser usually makes. It sizes every lead that states none.
+        </p>
+        <input
+          id={id}
+          type="number"
+          inputMode="decimal"
+          aria-describedby={hintId}
+          value={text}
+          onChange={(event) => {
+            setText(event.target.value)
+            choose(event.target.value === '' ? null : Number(event.target.value))
+          }}
+        />
+      </div>
+    </section>
+  )
+}
+
+function Confirmation({
+  problems,
+  saving,
+  confirming,
+  problem,
+  confirm,
+}: {
+  problems: string[]
+  saving: Saving
+  confirming: boolean
+  problem: string | null
+  confirm: () => void
+}) {
+  const listId = useId()
+  return (
+    <section className="confirmation" aria-label="Confirm the mapping">
+      <p className="save-state muted" aria-live="polite">
+        {saving.state === 'saving' && 'Saving the draft…'}
+        {saving.state === 'saved' && 'Draft saved.'}
+      </p>
+      {saving.state === 'failed' && (
+        <p className="problem" role="alert">
+          {saving.problem}
+        </p>
+      )}
+      {problems.length > 0 ? (
+        <div className="to-do" aria-live="polite">
+          <h3 id={listId}>Before you can confirm</h3>
+          <ul aria-labelledby={listId}>
+            {problems.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+          </ul>
+        </div>
+      ) : (
+        <p>
+          Every column and CRM stage is mapped. Once confirmed, the mapping can no longer be
+          changed.
+        </p>
+      )}
+      <button
+        type="button"
+        className="primary"
+        disabled={problems.length > 0 || saving.state !== 'saved' || confirming}
+        onClick={confirm}
+      >
+        {confirming ? 'Confirming…' : 'Confirm the mapping'}
+      </button>
+      {problem && (
+        <p className="problem" role="alert">
+          {problem}
+        </p>
+      )}
+    </section>
+  )
+}
+
+function formatTime(iso: string): string {
+  return new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' }).format(
+    new Date(iso),
   )
 }
