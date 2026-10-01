@@ -145,7 +145,7 @@ def test_a_fit_that_does_not_converge_is_recorded(monkeypatch: pytest.MonkeyPatc
 
 def test_a_leads_chance_of_winning_is_the_product_over_the_four_transitions():
     features = Features(
-        numbers=(NumberInput(column="Budget", mean=0.0, sd=1.0),),
+        numbers=(NumberInput(column="Budget", mean=0.0, sd=1.0, any_given=True),),
         categories=(),
     )
 

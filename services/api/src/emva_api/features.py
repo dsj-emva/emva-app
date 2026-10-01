@@ -30,9 +30,8 @@ class NumberInput(BaseModel):
     column: str
     mean: float
     sd: float
-    # False when no training lead gave it, so its mean stands for nothing; a model kept before
-    # this was recorded reads as given.
-    any_given: bool = True
+    # False when no training lead gave it, so its mean stands for nothing.
+    any_given: bool
 
 
 class CategoryInput(BaseModel):

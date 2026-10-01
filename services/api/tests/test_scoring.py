@@ -23,8 +23,8 @@ INPUTS = {
 }
 FEATURES = Features(
     numbers=(
-        NumberInput(column="Budget", mean=4000.0, sd=2000.0),
-        NumberInput(column="Nights", mean=7.5, sd=2.5),
+        NumberInput(column="Budget", mean=4000.0, sd=2000.0, any_given=True),
+        NumberInput(column="Nights", mean=7.5, sd=2.5, any_given=True),
     ),
     # Safari is the most common trip.
     categories=(CategoryInput(column="Trip", values=("Safari", "Honeymoon", None)),),
