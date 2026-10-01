@@ -6,7 +6,6 @@ from emva_api.ladder import (
     LADDER,
     LOST,
     STAGES_AND_LOST,
-    UNFINISHED,
     Lost,
     Progress,
     Stage,
@@ -54,14 +53,14 @@ def at(day: int, hour: int = 9) -> datetime:
     return datetime(2024, 3, day, hour, tzinfo=UTC)
 
 
-def test_a_lead_with_no_stage_events_is_submitted_and_unfinished():
-    assert progress([]) == Progress(Stage.SUBMITTED, lost_after=None, outcome=UNFINISHED)
+def test_a_lead_with_no_stage_events_is_submitted_with_no_outcome_yet():
+    assert progress([]) == Progress(Stage.SUBMITTED, lost_after=None, outcome=None)
 
 
-def test_a_lead_that_reached_a_stage_and_stopped_is_unfinished_never_lost():
+def test_a_lead_that_reached_a_stage_and_stopped_has_no_outcome_yet_and_is_never_lost():
     lead = progress([StageEvent(Stage.SUBMITTED, at(1)), StageEvent(Stage.ENGAGED, at(3))])
 
-    assert lead == Progress(Stage.ENGAGED, lost_after=None, outcome=UNFINISHED)
+    assert lead == Progress(Stage.ENGAGED, lost_after=None, outcome=None)
 
 
 def test_reaching_a_later_stage_counts_as_reaching_every_stage_before_it():
@@ -83,7 +82,7 @@ def test_several_events_on_one_stage_count_once():
         ]
     )
 
-    assert lead == Progress(Stage.CONTACT_ATTEMPTED, lost_after=None, outcome=UNFINISHED)
+    assert lead == Progress(Stage.CONTACT_ATTEMPTED, lost_after=None, outcome=None)
 
 
 def test_a_won_lead_keeps_when_it_was_won_and_its_deal_value():
@@ -111,10 +110,24 @@ def test_a_lead_lost_after_any_stage_is_lost_after_the_furthest_stage_it_reached
     assert lead == Progress(stage, lost_after=stage, outcome=Lost(at=at(6)))
 
 
-def test_a_lead_lost_with_no_other_events_is_lost_after_submitted():
-    lead = progress([StageEvent(LOST, at(2))])
+def test_a_lead_lost_before_any_contact_attempt_is_lost_and_neglected():
+    lead = progress([StageEvent(Stage.SUBMITTED, at(1)), StageEvent(LOST, at(2))])
 
     assert lead == Progress(Stage.SUBMITTED, lost_after=Stage.SUBMITTED, outcome=Lost(at=at(2)))
+    assert lead.neglected
+
+
+@pytest.mark.parametrize(
+    ("events", "neglected"),
+    [
+        ([], True),
+        ([StageEvent(Stage.SUBMITTED, at(1))], True),
+        ([StageEvent(Stage.CONTACT_ATTEMPTED, at(2))], False),
+        ([StageEvent(Stage.QUALIFIED, at(2)), StageEvent(LOST, at(3))], False),
+    ],
+)
+def test_a_lead_never_attempted_is_neglected(events: list[StageEvent], neglected: bool):
+    assert progress(events).neglected is neglected
 
 
 def test_stage_events_out_of_time_order_are_read_in_time_order():
@@ -137,7 +150,7 @@ def test_a_lead_reopened_after_it_was_lost_is_decided_by_its_latest_event():
         ]
     )
 
-    assert reopened == Progress(Stage.QUALIFIED, lost_after=None, outcome=UNFINISHED)
+    assert reopened == Progress(Stage.QUALIFIED, lost_after=None, outcome=None)
 
 
 def test_a_lead_lost_again_after_it_was_reopened_is_lost_after_its_furthest_stage():

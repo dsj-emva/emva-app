@@ -66,25 +66,26 @@ class Lost:
     at: datetime
 
 
-@dataclass(frozen=True)
-class Unfinished:
-    """Neither won nor lost (yet); never counted as lost."""
-
-
-UNFINISHED: Final = Unfinished()
-
-type Outcome = Won | Lost | Unfinished
+# What finally happened to a lead: won, or not won (lost).
+type Outcome = Won | Lost
 
 
 @dataclass(frozen=True)
 class Progress:
     furthest: Stage
+    # The Stage the lead was lost after, as recorded; None unless its Outcome is Lost.
     lost_after: Stage | None
-    outcome: Outcome
+    # None while the lead has no Outcome yet: neither won nor lost, and never counted as lost.
+    outcome: Outcome | None
 
     def reached(self, stage: Stage) -> bool:
         """Reaching a Stage counts as reaching every Stage before it."""
         return LADDER.index(stage) <= LADDER.index(self.furthest)
+
+    @property
+    def neglected(self) -> bool:
+        """A Neglected lead: the advertiser never attempted to contact it."""
+        return not self.reached(Stage.CONTACT_ATTEMPTED)
 
 
 def progress(events: Iterable[StageEvent]) -> Progress:
@@ -94,6 +95,11 @@ def progress(events: Iterable[StageEvent]) -> Progress:
     event's Deal value. Otherwise the latest event decides: a lead whose latest event is Lost was
     lost after the furthest Stage it reached; a later Stage reopens a lost lead. Lost recorded at
     the same moment as a Stage is read as after it.
+
+    A lead lost before any Contact attempt has the Outcome lost, after Submitted, and is also a
+    Neglected lead. Whether it was attempted is the advertiser's behaviour, not the lead's
+    quality, so per decision 0002 and ruling 2 of the phase 1 PRD it never counts as a failed
+    Transition: learning (#8) leaves it out, as it does every Neglected lead.
     """
     in_time_order = sorted(events, key=lambda event: (event.at, event.stage == LOST))
     furthest = max(
@@ -104,4 +110,4 @@ def progress(events: Iterable[StageEvent]) -> Progress:
         return Progress(Stage.WON, None, Won(at=first_won.at, deal_value=first_won.deal_value))
     if in_time_order and in_time_order[-1].stage == LOST:
         return Progress(LADDER[furthest], LADDER[furthest], Lost(at=in_time_order[-1].at))
-    return Progress(LADDER[furthest], None, UNFINISHED)
+    return Progress(LADDER[furthest], None, None)
