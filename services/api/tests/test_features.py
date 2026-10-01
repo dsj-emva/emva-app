@@ -84,6 +84,15 @@ def test_numbers_come_before_categories_each_in_the_order_of_the_inputs():
     assert features.row(row) == [1.0, 0.0, -1.0, 0.0, 1.0, 0.0, 1.0]
 
 
+def test_the_typical_lead_has_every_number_at_its_mean_and_every_category_at_its_most_common():
+    leads = [
+        lead({"Nights": n}, {"Trip": t})
+        for n, t in ((2.0, "Honeymoon"), (None, "Safari"), (6.0, "Safari"))
+    ]
+
+    assert fit_features(leads).typical() == ({"Nights": 4.0}, {"Trip": "Safari"})
+
+
 def test_the_fitted_parameters_are_kept_as_json_and_read_back_the_same():
     leads = [lead({"Budget": b}, {"Trip": t}) for b, t in ((1.0, "Safari"), (None, "Honeymoon"))]
     features = fit_features(leads)

@@ -66,6 +66,25 @@
         "title": "Advertiser",
         "type": "object"
       },
+      "Choice": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "value": {
+            "description": "What to send; empty for a category not given",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "Choice",
+        "type": "object"
+      },
       "Column": {
         "properties": {
           "examples": {
@@ -150,6 +169,46 @@
           "label"
         ],
         "title": "DateOrderChoice",
+        "type": "object"
+      },
+      "EnteredLead": {
+        "properties": {
+          "inputs": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "description": "Every input by its column, as a file would write it; a number may be empty",
+            "title": "Inputs",
+            "type": "object"
+          }
+        },
+        "required": [
+          "inputs"
+        ],
+        "title": "EnteredLead",
+        "type": "object"
+      },
+      "Explanation": {
+        "properties": {
+          "steps": {
+            "description": "One per input, in the Mapping's order",
+            "items": {
+              "$ref": "#/components/schemas/Step"
+            },
+            "title": "Steps",
+            "type": "array"
+          },
+          "typical_chance": {
+            "description": "The typical lead's chance of winning",
+            "title": "Typical Chance",
+            "type": "number"
+          }
+        },
+        "required": [
+          "typical_chance",
+          "steps"
+        ],
+        "title": "Explanation",
         "type": "object"
       },
       "FileKind": {
@@ -587,6 +646,123 @@
         "title": "Problem",
         "type": "object"
       },
+      "ScoredLead": {
+        "properties": {
+          "chance_of_winning": {
+            "title": "Chance Of Winning",
+            "type": "number"
+          },
+          "data_source": {
+            "$ref": "#/components/schemas/DataSource"
+          },
+          "explanation": {
+            "$ref": "#/components/schemas/Explanation"
+          },
+          "lead_score": {
+            "description": "The chance of winning times the deal size; not money",
+            "title": "Lead Score",
+            "type": "number"
+          },
+          "training_run_id": {
+            "format": "uuid",
+            "title": "Training Run Id",
+            "type": "string"
+          },
+          "typical_deal_size": {
+            "description": "The size the Lead score used",
+            "title": "Typical Deal Size",
+            "type": "number"
+          }
+        },
+        "required": [
+          "training_run_id",
+          "data_source",
+          "chance_of_winning",
+          "typical_deal_size",
+          "lead_score",
+          "explanation"
+        ],
+        "title": "ScoredLead",
+        "type": "object"
+      },
+      "ScoringForm": {
+        "properties": {
+          "data_source": {
+            "$ref": "#/components/schemas/DataSource"
+          },
+          "inputs": {
+            "description": "The Mapping's inputs, in its order",
+            "items": {
+              "$ref": "#/components/schemas/ScoringInput"
+            },
+            "title": "Inputs",
+            "type": "array"
+          },
+          "trained_at": {
+            "format": "date-time",
+            "title": "Trained At",
+            "type": "string"
+          },
+          "training_run_id": {
+            "format": "uuid",
+            "title": "Training Run Id",
+            "type": "string"
+          },
+          "typical_deal_size": {
+            "title": "Typical Deal Size",
+            "type": "number"
+          }
+        },
+        "required": [
+          "training_run_id",
+          "trained_at",
+          "data_source",
+          "typical_deal_size",
+          "inputs"
+        ],
+        "title": "ScoringForm",
+        "type": "object"
+      },
+      "ScoringInput": {
+        "properties": {
+          "choices": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Choice"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A category's values seen in training, most common first; null for a number",
+            "title": "Choices"
+          },
+          "column": {
+            "description": "The input's name, as the Mapping has it",
+            "title": "Column",
+            "type": "string"
+          },
+          "kind": {
+            "$ref": "#/components/schemas/ColumnKind"
+          },
+          "typical": {
+            "description": "The typical lead's value: the training mean or most common",
+            "title": "Typical",
+            "type": "string"
+          }
+        },
+        "required": [
+          "column",
+          "kind",
+          "typical",
+          "choices"
+        ],
+        "title": "ScoringInput",
+        "type": "object"
+      },
       "Stage": {
         "description": "A Stage of the Canonical ladder; members are in ladder order.",
         "enum": [
@@ -705,6 +881,51 @@
           "name"
         ],
         "title": "StageOrLostChoice",
+        "type": "object"
+      },
+      "Step": {
+        "properties": {
+          "after": {
+            "description": "The chance of winning once it changed to this lead's",
+            "title": "After",
+            "type": "number"
+          },
+          "before": {
+            "description": "The chance of winning before this input changed",
+            "title": "Before",
+            "type": "number"
+          },
+          "change": {
+            "description": "How far this input moved the chance: up when above zero",
+            "readOnly": true,
+            "title": "Change",
+            "type": "number"
+          },
+          "input": {
+            "description": "The input's name, as the Mapping has it",
+            "title": "Input",
+            "type": "string"
+          },
+          "typical": {
+            "description": "The typical lead's value",
+            "title": "Typical",
+            "type": "string"
+          },
+          "value": {
+            "description": "This lead's value; \u201cnot given\u201d when it was left blank",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "input",
+          "typical",
+          "value",
+          "before",
+          "after",
+          "change"
+        ],
+        "title": "Step",
         "type": "object"
       },
       "Summary": {
@@ -1479,6 +1700,168 @@
           }
         },
         "summary": "Confirm Mapping"
+      }
+    },
+    "/advertisers/{advertiser_id}/scores": {
+      "post": {
+        "description": "The entered lead's Submit score and Score explanation, from the latest Training run.",
+        "operationId": "scoreLead",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "advertiser_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Advertiser Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EnteredLead"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScoredLead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The lead cannot be scored: an input missing, unreadable or unseen in training, or no chance known"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No Training run yet"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Score Lead"
+      }
+    },
+    "/advertisers/{advertiser_id}/scoring-form": {
+      "get": {
+        "description": "The inputs a person enters to score one new lead.",
+        "operationId": "getScoringForm",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "advertiser_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Advertiser Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ScoringForm"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No Training run yet"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Scoring Form"
       }
     },
     "/advertisers/{advertiser_id}/training": {

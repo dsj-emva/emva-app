@@ -150,6 +150,14 @@ def _training(advertiser: records.Advertiser, latest: TrainingRunView | None) ->
 def _latest(
     session: Session, advertiser: records.Advertiser, store: ObjectStore
 ) -> TrainingRunView | None:
+    latest = latest_run(session, advertiser, store)
+    return None if latest is None else _view(*latest)
+
+
+def latest_run(
+    session: Session, advertiser: records.Advertiser, store: ObjectStore
+) -> tuple[records.TrainingRun, Model] | None:
+    """The advertiser's latest Training run and its model; None before the first."""
     run = session.scalars(
         select(records.TrainingRun)
         .where(records.TrainingRun.advertiser_id == advertiser.id)
@@ -165,7 +173,7 @@ def _latest(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "The latest Training run's model could not be read from storage. Try again.",
         ) from error
-    return _view(run, Model.model_validate_json(stored))
+    return run, Model.model_validate_json(stored)
 
 
 def _view(run: records.TrainingRun, model: Model) -> TrainingRunView:

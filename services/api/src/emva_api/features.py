@@ -48,6 +48,14 @@ class Features(BaseModel):
     numbers: tuple[NumberInput, ...]
     categories: tuple[CategoryInput, ...]
 
+    def typical(self) -> tuple[dict[str, float | None], dict[str, str | None]]:
+        """The typical lead's inputs: every number at its training mean, given, and every
+        category at its most common training value."""
+        return (
+            {number.column: number.mean for number in self.numbers},
+            {category.column: category.values[0] for category in self.categories},
+        )
+
     def row(self, lead: FormattedLead) -> list[float]:
         """The lead's inputs as the model reads them; Refused when it cannot read them."""
         row: list[float] = []
