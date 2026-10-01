@@ -79,8 +79,10 @@ class Files:
 
 
 def most_categories(row_count: int) -> int:
-    """The most distinct values a category input may have: more and it is not a category."""
-    return max(20, row_count // 4)
+    """The most distinct values a category input may have: more and it is not a category. A
+    quarter of the rows, at least 20 and never more than 50, so a column of first names cannot
+    pass as a category however large the file."""
+    return min(50, max(20, row_count // 4))
 
 
 @dataclass(frozen=True)
@@ -199,19 +201,20 @@ def confirm(mapping: Mapping, files: Files, at: datetime) -> ConfirmedMapping:
 
 
 def _category_problems(inputs: dict[str, ColumnKind], files: Files) -> list[str]:
-    """A category input can carry neither contact details nor free text (decision 0010)."""
+    """No input carries contact details, and a category input carries no free text either
+    (decision 0010)."""
     found = []
     most = most_categories(files.leads_row_count)
     for column, kind in inputs.items():
         facts = files.leads_column_facts.get(column)
-        if kind is not ColumnKind.CATEGORY or facts is None:
+        if facts is None:
             continue
         if facts.looks_like_contact:
             found.append(
-                f"“{column}” cannot be a category input: some of its values look like email "
-                "addresses or phone numbers."
+                f"“{column}” cannot be {'a category' if kind is ColumnKind.CATEGORY else 'an'} "
+                "input: some of its values look like email addresses or phone numbers."
             )
-        elif facts.distinct_values > most:
+        elif kind is ColumnKind.CATEGORY and facts.distinct_values > most:
             found.append(
                 f"“{column}” cannot be a category input: it has {facts.distinct_values} "
                 f"different values, more than the {most} a category may have in this file."

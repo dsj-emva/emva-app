@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from emva_api.csv_file import ColumnFacts
+from emva_api.csv_file import ColumnFacts, column_facts, read_csv
 from emva_api.dates import DateOrder
 from emva_api.ladder import LOST, Stage
 from emva_api.mapping import (
@@ -87,7 +87,7 @@ def test_a_new_mapping_lists_everything_still_to_do():
     ]
 
 
-# Date order, time zone and default country
+# Date order and time zone
 
 
 def test_a_new_mapping_reads_times_without_a_zone_as_utc():
@@ -151,24 +151,55 @@ def files_with(facts: ColumnFacts, row_count: int = 100) -> Files:
     )
 
 
-def test_a_category_input_whose_values_look_like_contact_details_is_refused():
+def test_an_input_whose_values_look_like_contact_details_is_refused_whatever_its_kind():
     found = problems(COMPLETE, files_with(ColumnFacts(distinct_values=3, looks_like_contact=True)))
 
     assert found == [
         "“Trip Type” cannot be a category input: some of its values look like email addresses "
-        "or phone numbers."
+        "or phone numbers.",
+        "“Budget” cannot be an input: some of its values look like email addresses or phone "
+        "numbers.",
     ]
 
 
-@pytest.mark.parametrize(("row_count", "distinct"), [(10, 20), (100, 25), (400, 100)])
-def test_a_category_input_may_have_20_values_or_a_quarter_of_the_rows(row_count, distinct):
+def test_a_phone_column_cannot_pass_as_a_number_input():
+    table = read_csv(b"Lead ID,Mobile\nL1,07700900101\nL2,07700900102\n")
+    files = Files(
+        leads_columns=table.columns,
+        stage_history_columns=FILES.stage_history_columns,
+        crm_stages=FILES.crm_stages,
+        leads_row_count=table.row_count,
+        leads_column_facts=column_facts(table),
+    )
+    mobile_as_number = Mapping.model_validate(
+        {
+            **COMPLETE.model_dump(),
+            "leads": {
+                "lead_id": "Lead ID",
+                "submitted_at": "Lead ID",
+                "inputs": {"Mobile": "number"},
+            },
+        }
+    )
+
+    assert (
+        "“Mobile” cannot be an input: some of its values look like email addresses or phone "
+        "numbers." in problems(mobile_as_number, files)
+    )
+
+
+@pytest.mark.parametrize(("row_count", "distinct"), [(10, 20), (100, 25), (200, 50), (100_000, 50)])
+def test_a_category_input_may_have_a_quarter_of_the_rows_in_values_from_20_to_50(
+    row_count, distinct
+):
     facts = ColumnFacts(distinct_values=distinct, looks_like_contact=False)
 
     assert problems(COMPLETE, files_with(facts, row_count)) == []
 
 
 @pytest.mark.parametrize(
-    ("row_count", "distinct", "most"), [(10, 21, 20), (100, 26, 25), (400, 101, 100)]
+    ("row_count", "distinct", "most"),
+    [(10, 21, 20), (100, 26, 25), (400, 51, 50), (100_000, 51, 50)],
 )
 def test_a_category_input_with_more_values_than_that_is_refused(row_count, distinct, most):
     facts = ColumnFacts(distinct_values=distinct, looks_like_contact=False)

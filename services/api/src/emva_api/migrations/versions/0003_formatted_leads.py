@@ -66,6 +66,16 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Before 0003 every uploaded file had its raw file in storage. Once one is formatted and
+    # deleted that is no longer true, and nothing can bring the raw file back.
+    deleted = op.get_bind().execute(
+        sa.text("SELECT count(*) FROM uploaded_file WHERE object_key IS NULL")
+    )
+    if deleted.scalar_one():
+        raise RuntimeError(
+            "Cannot downgrade below 0003: some uploaded files were formatted and their raw "
+            "files deleted, which revision 0002 cannot record. Delete those advertisers first."
+        )
     op.drop_table("formatting")
     op.drop_index("stage_event_lead_id", table_name="stage_event")
     op.drop_table("stage_event")

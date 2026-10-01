@@ -288,7 +288,12 @@ def test_an_old_confirmed_mapping_without_a_date_order_cannot_be_formatted_and_k
     old = {key: value for key, value in HAND_MADE_MAPPING.items() if key != "date_order"}
     advertiser = confirmed_without_formatting(client, settings, old)
 
+    still_to_do = client.get(f"/advertisers/{advertiser}/mapping").json()["still_to_do"]
     refused = confirm(client, advertiser)
+
+    assert "Confirm again" not in still_to_do
+    assert "start a new advertiser" in still_to_do
+    assert still_to_do == refused.json()["detail"]
 
     assert refused.status_code == 409
     assert "Pick the order the files write dates in." in refused.json()["detail"]

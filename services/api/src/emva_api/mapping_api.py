@@ -214,12 +214,9 @@ def confirm_mapping(
             confirmed = ConfirmedMapping(
                 mapping=Mapping.model_validate(record.content), confirmed_at=record.confirmed_at
             )
-            shape = FileShape.model_validate(record.confirmed_against)
-            missing = mapping.problems(confirmed.mapping, shape.files())
-            if missing:
-                raise _never_formatted(
-                    f"as confirmed it lacks what formatting needs: {' '.join(missing)}"
-                )
+            lacking = _lacking_for_formatting(record)
+            if lacking:
+                raise _never_formatted(lacking)
             _format(advertiser, confirmed, store, session, confirmed_before=True)
             _commit(session)
         elif not _raw_uploads(advertiser):
@@ -269,6 +266,15 @@ def _format(
     )
 
 
+def _lacking_for_formatting(record: records.AdvertiserMapping) -> str | None:
+    """Why a mapping confirmed before formatting existed can never be formatted, if it cannot:
+    it lacks what formatting now needs (a date order, say), and it cannot be changed."""
+    content = Mapping.model_validate(record.content)
+    shape = FileShape.model_validate(record.confirmed_against)
+    missing = mapping.problems(content, shape.files())
+    return f"as confirmed it lacks what formatting needs: {' '.join(missing)}" if missing else None
+
+
 def _never_formatted(why: str) -> HTTPException:
     return HTTPException(
         status.HTTP_409_CONFLICT,
@@ -316,7 +322,10 @@ def _confirmed_review(
     advertiser: records.Advertiser, record: records.AdvertiserMapping
 ) -> MappingReview:
     formatting = advertiser.formatting
-    if formatting is None:
+    lacking = _lacking_for_formatting(record)
+    if formatting is None and lacking:
+        still_to_do = _never_formatted(lacking).detail
+    elif formatting is None:
         still_to_do = (
             "The mapping is confirmed but its data is not formatted yet. Confirm again to "
             "format it."
