@@ -45,8 +45,8 @@ def add_uploaded_file(engine, object_key: str | None) -> None:
         connection.execute(
             text(
                 "INSERT INTO uploaded_file (id, advertiser_id, kind, file_name, object_key, "
-                "uploaded_at, row_count, column_names) VALUES (:id, :advertiser, 'leads', "
-                "'leads.csv', :key, now(), 1, '[]')"
+                "uploaded_at, row_count, column_names, column_facts) VALUES (:id, :advertiser, "
+                "'leads', 'leads.csv', :key, now(), 1, '[]', '{}')"
             ),
             {"id": uuid.uuid4(), "advertiser": advertiser, "key": object_key},
         )

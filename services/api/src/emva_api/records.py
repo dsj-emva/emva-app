@@ -101,9 +101,8 @@ class UploadedFile(Base):
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     row_count: Mapped[int]
     column_names: Mapped[list[str]] = mapped_column(JSON)
-    # What each column's values are like (counts and flags, never values), read on upload;
-    # null for a file uploaded before they were kept.
-    column_facts: Mapped[dict[str, Any] | None] = mapped_column(JSON)
+    # What each column's values are like (counts and flags, never values), read on upload.
+    column_facts: Mapped[dict[str, Any]] = mapped_column(JSON)
     advertiser: Mapped[Advertiser] = relationship(back_populates="files")
 
 
@@ -186,8 +185,7 @@ class TrainingRun(Base):
     advertiser_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("advertiser.id"))
     trained_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     model_key: Mapped[str] = mapped_column(String(255))
-    # Null for a run trained before Backtests were kept.
-    backtest_key: Mapped[str | None] = mapped_column(String(255))
+    backtest_key: Mapped[str] = mapped_column(String(255))
 
 
 def keep_formatted(
