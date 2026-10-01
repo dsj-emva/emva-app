@@ -1,0 +1,9 @@
+# Both images build from the repository root; send only what they copy.
+**/node_modules
+**/.venv
+**/__pycache__
+**/dist
+.git
+.claude
+.github
+docs
