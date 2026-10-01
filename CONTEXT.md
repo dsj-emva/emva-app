@@ -24,8 +24,8 @@ _Avoid_: lead value, conversion value (the platforms' name for the field that ca
 **Submit score**:
 The **Lead score** sent the moment a lead arrives: how likely the lead is to win, predicted only from what is
 known at submission, times its likely deal size. The size comes only from what the lead states (a budget, a
-number of seats, a number of nights); when it states nothing, the advertiser's typical deal size is used, so
-every lead is on the same scale. Never guessed from outside data at submission.
+number of seats, a number of nights); when it states nothing, the advertiser's **Typical deal size** is used,
+so every lead is on the same scale. Never guessed from outside data at submission.
 _Avoid_: submit value
 
 **Stage score**:
@@ -47,6 +47,10 @@ _Avoid_: secondary conversion
 The money a won (or quoted) deal is worth, as recorded in the advertiser's CRM. Real currency; used for
 learning and reporting, and enters **Lead scores** only through **Stage scores**.
 
+**Typical deal size**:
+The size of deal an advertiser usually makes, set by a person (not worked out from recorded **Deal values**),
+used as a lead's size when the lead states none. Being set, not learned, it does not move between retrains.
+
 ### Sales process
 
 **Stage**:
@@ -58,6 +62,11 @@ _Avoid_: status, step
 The fixed, ordered set of **Stages** every advertiser's sales process is expressed on: Submitted, Contact
 attempted, Engaged, Qualified, Proposal, Won (Lost can follow any stage). Shared across advertisers so
 industry models can be reused.
+
+**CRM stage**:
+The advertiser's own name for a point in its sales process, as its CRM records it, before the **Formatter**
+places it on a **Stage** of the **Canonical ladder** or on Lost.
+_Avoid_: CRM status
 
 **Milestone**:
 An advertiser-specific step that sits inside one **Canonical ladder** stage (e.g. "quote sent" within
@@ -102,6 +111,11 @@ Known only after submission, so it informs **Stage scores**, never the **Submit 
 The step that turns an advertiser's data, in whatever shape it arrives (spreadsheet, CRM export), into
 Emva's canonical structure, outcome included.
 _Avoid_: converter, adapter, importer
+
+**Mapping**:
+The instructions that tell the **Formatter** what each column of an advertiser's data means and where each
+**CRM stage** sits on the **Canonical ladder**. Filled in by hand or drafted by a language model, and always
+confirmed by a person before it is used.
 
 **Judgment**:
 A category a language model assigns after reading a lead's own words (e.g. urgency: high / low / unclear).
@@ -156,6 +170,10 @@ A model trained for one industry that can be reused for every advertiser in that
 **Challenger**:
 A more complex model fitted beside the default on every run; it replaces the default only by beating it on the
 **Backtest** under rules fixed in advance.
+
+**Training run**:
+One fit of the models (the default and, once it exists, the **Challenger**) on one set of data, together with
+its **Backtest**.
 
 **Customer adjustment**:
 The fitting of an industry model to one advertiser's own data.
