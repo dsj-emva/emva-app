@@ -1,7 +1,7 @@
 """The injected clock (decision 0006): the only place in Emva that reads the wall clock.
 
-Everything that needs "now" takes a Clock, so the same code runs in real time, on a simulated clock and in
-tests on a fixed one.
+Everything that needs "now" takes a Clock, so the same code runs in real time, on a simulated
+clock and in tests on a fixed one.
 """
 
 from datetime import UTC, datetime
