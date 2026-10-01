@@ -314,7 +314,8 @@ def test_an_old_confirmed_mapping_without_a_date_order_cannot_be_formatted_and_k
 
 
 # Done when: no name, raw email or raw phone number from the hand-made dataset is found anywhere
-# in Postgres or object storage after formatting, and the raw uploads are gone.
+# in Postgres or object storage after formatting, training and scoring a lead, and the raw uploads
+# are gone.
 
 
 def personal_data(leads_csv: str) -> set[str]:
@@ -419,11 +420,23 @@ def test_after_formatting_no_personal_data_is_stored_anywhere(
         saved = c.put(f"/advertisers/{advertiser}/mapping", json=HAND_MADE_MAPPING).json()
         assert saved["problems"] == []
         confirmed = c.post(f"/advertisers/{advertiser}/mapping/confirmation")
-    assert confirmed.status_code == 200, confirmed.text
-    assert confirmed.json()["formatting"]["lead_count"] == 100
+        assert confirmed.status_code == 200, confirmed.text
+        assert confirmed.json()["formatting"]["lead_count"] == 100
+        assert list(own_bucket.objects.all()) == [], "the raw uploads are gone"
+        trained = c.post(f"/advertisers/{advertiser}/training-runs")
+        assert trained.status_code == 201, trained.text
+        first = next(csv.DictReader(io.StringIO(leads)))
+        inputs = {column: first[column] for column in HAND_MADE_MAPPING["leads"]["inputs"]}
+        scored = c.post(f"/advertisers/{advertiser}/scores", json={"inputs": inputs})
+        assert scored.status_code == 200, scored.text
 
     stored = everything_in_postgres(own_settings)
     assert '"identifier_hash"' in stored, "the scan sees the formatted leads"
+    assert '"model_key"' in stored, "the scan sees the Training run"
     assert sorted(value for value in personal if value in stored) == []
-    assert list(own_bucket.objects.all()) == [], "the raw uploads are gone"
-    assert sorted(v for v in personal if v in everything_in_object_storage(own_bucket)) == []
+    kept = sorted(o.key.rsplit("/", 1)[1] for o in own_bucket.objects.all())
+    run = trained.json()["latest"]["id"]
+    assert kept == [f"{run}-backtest.json", f"{run}.json"], "only the model and its Backtest"
+    in_storage = everything_in_object_storage(own_bucket)
+    assert '"transitions"' in in_storage and '"calibration"' in in_storage, "the scan reads both"
+    assert sorted(v for v in personal if v in in_storage) == []
