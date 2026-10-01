@@ -26,9 +26,7 @@ def test_replicas_starting_together_migrate_the_database_once() -> None:
     try:
         environment = {
             **os.environ,
-            "DATABASE_URL": url.set(drivername="postgresql").render_as_string(
-                hide_password=False
-            ),
+            "DATABASE_URL": url.set(drivername="postgresql").render_as_string(hide_password=False),
         }
         replicas = [
             subprocess.Popen(
