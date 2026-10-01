@@ -1,0 +1,17 @@
+# Serves the built screens on $PORT and passes /api/... to the service at $API_URL, without the
+# /api prefix, exactly as the Vite proxy does in development.
+{
+	admin off
+}
+
+:{$PORT:8080} {
+	handle_path /api/* {
+		reverse_proxy {$API_URL}
+	}
+
+	handle {
+		root * /srv
+		try_files {path} /index.html
+		file_server
+	}
+}

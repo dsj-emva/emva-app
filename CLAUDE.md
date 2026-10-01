@@ -23,6 +23,7 @@ Never read `../emva-sim` (decision 0007); `.claude/settings.json` denies it.
 | `apps/web` | Screens only; they compute nothing and get every number from the service | Vite, React, TypeScript (strict), vitest, oxlint |
 | `compose.yaml` | Local Postgres (host port 5433) and S3-compatible object storage (SeaweedFS, port 8333) | Docker |
 | `docs/` | START_HERE (the plan) and the decisions | |
+| `services/api/Dockerfile`, `apps/web/Dockerfile` | The service and the screens, deployed as plain containers (Railway, EU); both build from the repository root, and each Dockerfile lists the environment variables it needs | Docker |
 
 ## Commands
 
