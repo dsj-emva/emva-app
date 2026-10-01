@@ -94,7 +94,9 @@ def progress(events: Iterable[StageEvent]) -> Progress:
     Every lead is at least Submitted. Won is final: the lead was won when first won, with that
     event's Deal value. Otherwise the latest event decides: a lead whose latest event is Lost was
     lost after the furthest Stage it reached; a later Stage reopens a lost lead. Lost recorded at
-    the same moment as a Stage is read as after it.
+    the same moment as a Stage is read as after it. The user confirmed both rules when approving
+    phase 1 (2026-10-01); what a won deal later cancelled or refunded means is open decision 4
+    of START_HERE, for phase 2.
 
     A lead lost before any Contact attempt has the Outcome lost, after Submitted, and is also a
     Neglected lead. Whether it was attempted is the advertiser's behaviour, not the lead's
