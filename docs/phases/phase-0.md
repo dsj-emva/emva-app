@@ -1,9 +1,9 @@
 # Phase 0 report: set-up of both repositories
 
-- State: waiting for approval
+- State: done (approved by the user on 2026-10-01)
 - Date: 2026-10-01
 - Repositories: [dsj-emva/emva-app](https://github.com/dsj-emva/emva-app), [dsj-emva/emva-sim](https://github.com/dsj-emva/emva-sim)
-- Open pull requests: emva-app [#2](https://github.com/dsj-emva/emva-app/pull/2) (this report, START_HERE tracking and Done-when lists), emva-app [#3](https://github.com/dsj-emva/emva-app/pull/3) (health page fix), emva-sim [#2](https://github.com/dsj-emva/emva-sim/pull/2) (guard hook). Merged: emva-app [#1](https://github.com/dsj-emva/emva-app/pull/1), emva-sim [#1](https://github.com/dsj-emva/emva-sim/pull/1) (Emva rename).
+- Pull requests (all merged): emva-app [#2](https://github.com/dsj-emva/emva-app/pull/2) (this report, START_HERE tracking and Done-when lists), emva-app [#3](https://github.com/dsj-emva/emva-app/pull/3) (health page fix), emva-sim [#2](https://github.com/dsj-emva/emva-sim/pull/2) (guard hook), emva-app [#1](https://github.com/dsj-emva/emva-app/pull/1), emva-sim [#1](https://github.com/dsj-emva/emva-sim/pull/1) (Emva rename).
 
 ## What was built
 
