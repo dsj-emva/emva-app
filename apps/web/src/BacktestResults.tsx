@@ -5,6 +5,7 @@ type Backtest = components['schemas']['Backtest']
 type Check = components['schemas']['Check']
 type Group = components['schemas']['Group']
 type Comparison = components['schemas']['Comparison']
+type Wording = components['schemas']['Wording']
 
 // The results of a Training run's Backtest. Every number, label and threshold comes from the
 // service; the screen only draws and formats them.
@@ -28,16 +29,24 @@ export function BacktestResults({
       <TrustGate checks={backtest.checks} passed={backtest.passed} />
 
       <div className="results-grid">
-        <Calibration groups={backtest.groups} slope={backtest.slope} dataSource={dataSource} />
+        <Calibration
+          groups={backtest.groups}
+          slope={backtest.slope}
+          slopeMissingBecause={backtest.slope_missing_because}
+          wording={backtest.wording}
+          dataSource={dataSource}
+        />
         <div className="results-side">
-          <StatusQuo comparison={backtest.comparison} dataSource={dataSource} />
+          <StatusQuo
+            comparison={backtest.comparison}
+            wording={backtest.wording}
+            dataSource={dataSource}
+          />
           <figure className="figure" aria-labelledby={aucId}>
             <figcaption id={aucId}>Ranking (AUC) {dataSource}</figcaption>
             <p className="figure-value data">{backtest.auc === null ? '—' : fixed(backtest.auc)}</p>
             <p className="muted">
-              {backtest.auc === null
-                ? 'Not known: it needs both won and lost leads scored.'
-                : 'The chance a won lead is ranked above a lost one. Reported, not gated.'}
+              {backtest.auc === null ? backtest.wording.auc_missing : backtest.wording.auc}
             </p>
           </figure>
         </div>
@@ -110,10 +119,14 @@ function y(rate: number): number {
 function Calibration({
   groups,
   slope,
+  slopeMissingBecause,
+  wording,
   dataSource,
 }: {
   groups: Group[]
   slope: number | null
+  slopeMissingBecause: string | null
+  wording: Wording
   dataSource: string
 }) {
   const titleId = useId()
@@ -123,9 +136,7 @@ function Calibration({
       <p className="figure-value data">
         Slope {slope === null ? '—' : fixed(slope, 3)}
       </p>
-      {slope === null && (
-        <p className="muted">The slope cannot be fitted on the leads scored.</p>
-      )}
+      {slopeMissingBecause && <p className="muted">{slopeMissingBecause}</p>}
       {groups.length === 0 ? (
         <p className="muted">No lead was scored, so there is nothing to draw.</p>
       ) : (
@@ -184,8 +195,7 @@ function Calibration({
             </text>
           </svg>
           <p id={`${titleId}-summary`} className="muted">
-            Each dot is a group of leads with similar predicted chances. Dots on the diagonal won
-            as often as predicted.
+            {wording.calibration}
           </p>
           <div className="table-scroll">
             <table>
@@ -222,9 +232,11 @@ function Calibration({
 
 function StatusQuo({
   comparison,
+  wording,
   dataSource,
 }: {
   comparison: Comparison | null
+  wording: Wording
   dataSource: string
 }) {
   const captionId = useId()
@@ -239,7 +251,7 @@ function StatusQuo({
           <p className="data">
             95% interval {signed(comparison.interval_low)} to {signed(comparison.interval_high)}
           </p>
-          <Interval comparison={comparison} />
+          <Interval comparison={comparison} betterSide={wording.better_side} />
           <dl className="briers">
             <div>
               <dt>Emva’s Brier score</dt>
@@ -250,10 +262,7 @@ function StatusQuo({
               <dd className="data">{fixed(comparison.status_quo_brier, 3)}</dd>
             </div>
           </dl>
-          <p className="muted">
-            The difference is the status quo’s Brier score minus Emva’s, lead by lead: above zero,
-            Emva is the more accurate. The status quo sends every lead alike.
-          </p>
+          <p className="muted">{wording.comparison}</p>
         </>
       )}
     </figure>
@@ -261,7 +270,7 @@ function StatusQuo({
 }
 
 // The interval drawn against zero, on a scale wide enough for both.
-function Interval({ comparison }: { comparison: Comparison }) {
+function Interval({ comparison, betterSide }: { comparison: Comparison; betterSide: string }) {
   const width = 280
   const pad = 12
   const reach = Math.max(Math.abs(comparison.interval_low), Math.abs(comparison.interval_high))
@@ -273,7 +282,7 @@ function Interval({ comparison }: { comparison: Comparison }) {
         0
       </text>
       <text className="tick" x={width - pad} y={44} textAnchor="end">
-        Emva better
+        {betterSide}
       </text>
       <line
         className="range"

@@ -17,6 +17,7 @@ export const BACKTEST: components['schemas']['Backtest'] = {
     { leads: 29, predicted: 0.4, actual: 0.55 },
   ],
   slope: 1.2183,
+  slope_missing_because: null,
   comparison: {
     emva_brier: 0.1616,
     status_quo_brier: 0.1834,
@@ -33,5 +34,12 @@ export const BACKTEST: components['schemas']['Backtest'] = {
       passed: false,
     },
   ],
+  wording: {
+    calibration: 'Each dot is a group of leads; on the diagonal, they won as predicted.',
+    comparison: 'Status quo minus Emva, lead by lead: above zero, Emva is the more accurate.',
+    better_side: 'Above zero: Emva more accurate',
+    auc: 'AUC: the chance a won lead is ranked above a lost one. Reported, not gated.',
+    auc_missing: 'Not known: AUC needs both won and lost leads scored.',
+  },
   passed: false,
 }

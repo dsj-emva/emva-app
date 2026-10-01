@@ -935,6 +935,11 @@ export interface components {
             /** Auc */
             auc: string;
             /**
+             * Auc Missing
+             * @description Said instead of AUC when it is null
+             */
+            auc_missing: string;
+            /**
              * Better Side
              * @description Which side of zero means Emva is the more accurate
              */

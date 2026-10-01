@@ -113,9 +113,7 @@ export function Training({
                   dataSource={loaded.training.latest.data_source}
                 />
               ) : (
-                <p className="muted">
-                  This run was trained before Backtests were kept. Train again to see its results.
-                </p>
+                <p className="muted">{loaded.training.latest.results_unavailable_because}</p>
               )}
               <Scoring
                 key={loaded.training.latest.id}

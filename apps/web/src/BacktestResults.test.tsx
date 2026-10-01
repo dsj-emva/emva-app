@@ -26,6 +26,7 @@ describe('BacktestResults', () => {
       ['29', '40%', '55%'],
     ])
     expect(screen.getByText(`Every number here is ${SOURCE}`)).toBeInTheDocument()
+    expect(screen.getByText(BACKTEST.wording.calibration)).toBeInTheDocument()
   })
 
   it('shows the comparison with the Status-quo signal and its interval, and AUC', () => {
@@ -40,7 +41,9 @@ describe('BacktestResults', () => {
     expect(within(comparison).getByText('0.183')).toBeInTheDocument()
     const ranking = screen.getByRole('figure', { name: `Ranking (AUC) ${SOURCE}` })
     expect(within(ranking).getByText('0.72')).toBeInTheDocument()
-    expect(within(ranking).getByText(/Reported, not gated/)).toBeInTheDocument()
+    expect(within(ranking).getByText(BACKTEST.wording.auc)).toBeInTheDocument()
+    expect(within(comparison).getByText(BACKTEST.wording.comparison)).toBeInTheDocument()
+    expect(within(comparison).getByText(BACKTEST.wording.better_side)).toBeInTheDocument()
   })
 
   it('marks a failed check as failed, as the service says', () => {
@@ -86,6 +89,7 @@ describe('BacktestResults', () => {
       ...BACKTEST,
       groups: [],
       slope: null,
+      slope_missing_because: 'No lead was scored.',
       comparison: null,
       auc: null,
     }
@@ -96,5 +100,7 @@ describe('BacktestResults', () => {
       screen.getByText('No lead was scored, so there is nothing to compare.'),
     ).toBeInTheDocument()
     expect(screen.queryByRole('img')).not.toBeInTheDocument()
+    expect(screen.getByText('No lead was scored.')).toBeInTheDocument()
+    expect(screen.getByText(BACKTEST.wording.auc_missing)).toBeInTheDocument()
   })
 })

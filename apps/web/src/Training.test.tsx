@@ -43,6 +43,7 @@ const RUN: TrainingRunView = {
   ],
   data_source: 'on hand-made test data',
   backtest: BACKTEST,
+  results_unavailable_because: null,
 }
 
 const TRAINABLE: TrainingState = {
@@ -105,16 +106,21 @@ describe('Training', () => {
     expect(screen.getByRole('region', { name: 'Backtest results' })).toBeInTheDocument()
   })
 
-  it('asks for training again when the latest run has no Backtest', async () => {
+  it('says why the latest run’s Backtest results are unavailable, as the service does', async () => {
+    const because =
+      'This run was trained before Backtests were kept. Train again to see its results.'
     const service = fakeService({
-      [`GET ${TRAINING}`]: () => Response.json({ ...TRAINABLE, latest: { ...RUN, backtest: null } }),
+      [`GET ${TRAINING}`]: () =>
+        Response.json({
+          ...TRAINABLE,
+          latest: { ...RUN, backtest: null, results_unavailable_because: because },
+        }),
     })
     renderTraining(service.client)
 
+    expect(await screen.findByText(because)).toBeInTheDocument()
     expect(
-      await screen.findByText(
-        'This run was trained before Backtests were kept. Train again to see its results.',
-      ),
+      screen.getByRole('table', { name: 'What each transition learned from' }),
     ).toBeInTheDocument()
     expect(screen.queryByRole('region', { name: 'Backtest results' })).not.toBeInTheDocument()
   })

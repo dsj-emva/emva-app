@@ -71,6 +71,7 @@ class Wording(BaseModel):
     comparison: str
     better_side: str = Field(description="Which side of zero means Emva is the more accurate")
     auc: str
+    auc_missing: str = Field(description="Said instead of AUC when it is null")
 
 
 WORDING = Wording(
@@ -81,6 +82,7 @@ WORDING = Wording(
     "rate of the leads before it.",
     better_side="Above zero: Emva more accurate",
     auc=NOT_GATED,
+    auc_missing="Not known: AUC needs both won and lost leads scored.",
 )
 
 

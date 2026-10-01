@@ -1520,6 +1520,11 @@
             "title": "Auc",
             "type": "string"
           },
+          "auc_missing": {
+            "description": "Said instead of AUC when it is null",
+            "title": "Auc Missing",
+            "type": "string"
+          },
           "better_side": {
             "description": "Which side of zero means Emva is the more accurate",
             "title": "Better Side",
@@ -1538,7 +1543,8 @@
           "calibration",
           "comparison",
           "better_side",
-          "auc"
+          "auc",
+          "auc_missing"
         ],
         "title": "Wording",
         "type": "object"
