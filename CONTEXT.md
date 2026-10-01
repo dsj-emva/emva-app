@@ -47,6 +47,10 @@ _Avoid_: secondary conversion
 The money a won (or quoted) deal is worth, as recorded in the advertiser's CRM. Real currency; used for
 learning and reporting, and enters **Lead scores** only through **Stage scores**.
 
+**Typical deal size**:
+The advertiser's usual **Deal value**, set by a person, used as a lead's size when the lead states none, so
+every lead is on the same scale. Set, not learned, so the scale does not move between retrains.
+
 ### Sales process
 
 **Stage**:
@@ -58,6 +62,10 @@ _Avoid_: status, step
 The fixed, ordered set of **Stages** every advertiser's sales process is expressed on: Submitted, Contact
 attempted, Engaged, Qualified, Proposal, Won (Lost can follow any stage). Shared across advertisers so
 industry models can be reused.
+
+**CRM stage**:
+The advertiser's own name for a step of its sales process, as its CRM records it, before the **Formatter**
+places it on the **Canonical ladder**.
 
 **Milestone**:
 An advertiser-specific step that sits inside one **Canonical ladder** stage (e.g. "quote sent" within
@@ -102,6 +110,11 @@ Known only after submission, so it informs **Stage scores**, never the **Submit 
 The step that turns an advertiser's data, in whatever shape it arrives (spreadsheet, CRM export), into
 Emva's canonical structure, outcome included.
 _Avoid_: converter, adapter, importer
+
+**Mapping**:
+The instructions, filled in and confirmed by a person, that tell the **Formatter** what each column of an
+advertiser's data means and where each **CRM stage** sits on the **Canonical ladder**. Nothing trains on data
+whose mapping is not confirmed.
 
 **Judgment**:
 A category a language model assigns after reading a lead's own words (e.g. urgency: high / low / unclear).
@@ -156,6 +169,9 @@ A model trained for one industry that can be reused for every advertiser in that
 **Challenger**:
 A more complex model fitted beside the default on every run; it replaces the default only by beating it on the
 **Backtest** under rules fixed in advance.
+
+**Training run**:
+One fit of the model on an advertiser's data, together with its **Backtest**.
 
 **Customer adjustment**:
 The fitting of an industry model to one advertiser's own data.
