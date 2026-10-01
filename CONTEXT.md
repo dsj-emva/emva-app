@@ -107,6 +107,16 @@ Known only after submission, so it informs **Stage scores**, never the **Submit 
 
 ### Data
 
+**Data source**:
+Where a set of an advertiser's data came from (hand-made test data, simulated data, public data, or the
+advertiser's private export), carried as a label on every number Emva shows from it.
+
+**Leads file**:
+The advertiser's export with one row per **Lead**, as its CRM or form tool writes it.
+
+**Stage-history file**:
+The advertiser's export with one row per change of a lead's **CRM stage**.
+
 **Formatter**:
 The step that turns an advertiser's data, in whatever shape it arrives (spreadsheet, CRM export), into
 Emva's canonical structure, outcome included.

@@ -5,7 +5,7 @@
   "type": "module",
   "exports": "./src/index.ts",
   "scripts": {
-    "generate": "openapi-typescript openapi.json --output src/schema.ts",
+    "generate": "node generate.mjs",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

@@ -17,6 +17,8 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: make install
+      - name: Start Postgres and object storage
+        run: make services
       - run: make lint
       - run: make test
       - name: Generated client is up to date

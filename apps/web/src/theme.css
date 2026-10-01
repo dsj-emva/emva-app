@@ -3,27 +3,57 @@
   --color-orange: #f26b1d;
   --color-black: #0b0b0b;
   --color-grey: #5c5c5c;
+  --color-grey-light: #a3a3a3;
+  --color-grey-pale: #ececea;
+  --color-grey-deep: #1c1c1c;
   --color-white: #ffffff;
 
   --color-background: var(--color-white);
+  --color-surface: var(--color-grey-pale);
   --color-text: var(--color-black);
+  --color-muted: var(--color-grey);
+  --color-rule: var(--color-black);
+  --color-rule-soft: var(--color-grey-light);
   --color-accent: var(--color-orange);
+  /* Text and icons drawn on the accent. */
+  --color-on-accent: var(--color-black);
+
+  --font-sans: 'Fira Sans', system-ui, sans-serif;
+  --font-data: 'Fira Code', ui-monospace, monospace;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 40px;
+  --space-6: 64px;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --color-background: var(--color-black);
-    --color-text: var(--color-white);
+    --color-surface: var(--color-grey-deep);
+    --color-text: var(--color-grey-pale);
+    --color-muted: var(--color-grey-light);
+    --color-rule: var(--color-grey-pale);
+    --color-rule-soft: var(--color-grey);
   }
+}
+
+:root[data-theme='dark'] {
+  --color-background: var(--color-black);
+  --color-surface: var(--color-grey-deep);
+  --color-text: var(--color-grey-pale);
+  --color-muted: var(--color-grey-light);
+  --color-rule: var(--color-grey-pale);
+  --color-rule-soft: var(--color-grey);
 }
 
 body {
   margin: 0;
-  font-family: system-ui, sans-serif;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  line-height: 1.5;
   background: var(--color-background);
   color: var(--color-text);
-}
-
-h1 {
-  color: var(--color-accent);
 }

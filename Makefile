@@ -1,11 +1,18 @@
 API := services/api
 CLIENT := packages/api-client
 
-.PHONY: install test lint generate-client check-client dev dev-api dev-web
+.PHONY: install services migrate test lint generate-client check-client dev dev-api dev-web
 
 install:
 	uv sync --project $(API)
 	pnpm install --frozen-lockfile
+
+# Postgres and object storage; the API tests and the service need both.
+services:
+	docker compose up -d --wait
+
+migrate:
+	uv run --project $(API) alembic -c $(API)/alembic.ini upgrade head
 
 test:
 	uv run --project $(API) pytest $(API)
@@ -27,8 +34,7 @@ check-client: generate-client
 	git diff --exit-code -- $(CLIENT)
 	test -z "$$(git status --porcelain -- $(CLIENT))"
 
-dev:
-	docker compose up -d
+dev: services migrate
 	$(MAKE) -j2 dev-api dev-web
 
 dev-api:
