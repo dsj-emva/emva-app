@@ -5,7 +5,7 @@ from datetime import UTC, datetime
 
 import pytest
 
-from emva_api.features import Features, Refused, fit_features
+from emva_api.features import Features, NumberInput, Refused, fit_features
 from emva_api.formatter import FormattedLead
 
 
@@ -91,6 +91,16 @@ def test_the_typical_lead_has_every_number_at_its_mean_and_every_category_at_its
     ]
 
     assert fit_features(leads).typical() == ({"Nights": 4.0}, {"Trip": "Safari"})
+
+
+def test_a_number_no_training_lead_gave_is_not_given_in_the_typical_lead():
+    features = fit_features([lead({"Budget": None}, {}) for _ in range(3)])
+
+    assert features.numbers[0].any_given is False
+    assert features.typical() == ({"Budget": None}, {})
+    # A model kept before this was recorded reads as given.
+    kept = '{"column": "Budget", "mean": 1.0, "sd": 1.0}'
+    assert NumberInput.model_validate_json(kept).any_given is True
 
 
 def test_the_fitted_parameters_are_kept_as_json_and_read_back_the_same():

@@ -4,10 +4,13 @@ The form holds exactly the confirmed Mapping's inputs, with the categories seen 
 Training run. An entered lead is formatted by the Formatter's `format_lead`, as training's leads
 were, and scored by `scoring.score` with that run's model and the advertiser's Typical deal size.
 Nothing about it is stored. It carries no personal data: the form has no such column.
+
+A refusal about the lead (an input missing, unreadable or unseen in training) is a bad request;
+one about the advertiser's state (no Training run, or one from which no chance can be known) is
+a conflict, whatever the lead.
 """
 
 import uuid
-from datetime import datetime
 from typing import NoReturn
 
 from fastapi import APIRouter, HTTPException, status
@@ -26,11 +29,11 @@ from emva_api.dependencies import (
 from emva_api.features import Refused
 from emva_api.formatter import Unreadable, format_lead
 from emva_api.mapping import ColumnKind, Mapping
-from emva_api.model import Model
+from emva_api.model import Model, NoChance
 from emva_api.object_store import ObjectStore
 from emva_api.records import DataSource
-from emva_api.scoring import NOT_GIVEN, Explanation, score, value_text
-from emva_api.training_api import STORAGE_FAILED, latest_run
+from emva_api.scoring import NOT_GIVEN, Score, score, value_text
+from emva_api.training_runs import STORAGE_FAILED, latest_run
 
 router = APIRouter()
 
@@ -38,13 +41,19 @@ NO_TRAINING_RUN = "No Training run yet. Train the model before scoring a lead."
 # Stands in for the entered lead's identifier, which the Formatter requires; never kept.
 ENTERED_LEAD = "entered on the scoring screen"
 
+NOT_SCORABLE = {
+    status.HTTP_409_CONFLICT: {
+        "model": Problem,
+        "description": "No Training run yet, or none from which a chance can be known",
+    }
+}
 REFUSED = {
     status.HTTP_400_BAD_REQUEST: {
         "model": Problem,
         "description": "The lead cannot be scored: an input missing, unreadable or unseen in "
-        "training, or no chance known",
+        "training",
     },
-    status.HTTP_409_CONFLICT: {"model": Problem, "description": "No Training run yet"},
+    **NOT_SCORABLE,
 }
 
 
@@ -57,16 +66,15 @@ class ScoringInput(BaseModel):
     column: str = Field(description="The input's name, as the Mapping has it")
     kind: ColumnKind
     typical: str = Field(description="The typical lead's value: the training mean or most common")
+    typical_choice: str | None = Field(
+        description="The value of the typical lead's choice, for a category; null for a number"
+    )
     choices: list[Choice] | None = Field(
         description="A category's values seen in training, most common first; null for a number"
     )
 
 
 class ScoringForm(BaseModel):
-    training_run_id: uuid.UUID
-    trained_at: datetime
-    data_source: DataSource
-    typical_deal_size: float
     inputs: list[ScoringInput] = Field(description="The Mapping's inputs, in its order")
 
 
@@ -76,44 +84,50 @@ class EnteredLead(BaseModel):
     )
 
 
-class ScoredLead(BaseModel):
-    training_run_id: uuid.UUID
-    data_source: DataSource
-    chance_of_winning: float
-    typical_deal_size: float = Field(description="The size the Lead score used")
-    lead_score: float = Field(description="The chance of winning times the deal size; not money")
-    explanation: Explanation
+class ScoredLead(Score):
+    data_source: DataSource = Field(description="Where the data the model learned from came from")
 
 
 @router.get(
     "/advertisers/{advertiser_id}/scoring-form",
     operation_id="getScoringForm",
-    responses={**NOT_FOUND, **STORAGE_FAILED, status.HTTP_409_CONFLICT: REFUSED[409]},
+    responses={**NOT_FOUND, **STORAGE_FAILED, **NOT_SCORABLE},
 )
 def get_scoring_form(advertiser_id: uuid.UUID, session: SessionDep, store: StoreDep) -> ScoringForm:
     """The inputs a person enters to score one new lead."""
-    advertiser, run, model, mapping = _latest(session, advertiser_id, store)
+    _, model, mapping = _latest(session, advertiser_id, store)
     numbers, categories = model.features.typical()
     values = {category.column: category.values for category in model.features.categories}
     inputs = []
     for column, kind in mapping.leads.inputs.items():
         if kind is ColumnKind.NUMBER:
-            typical, choices = numbers[column], None
+            if column not in numbers:
+                _not_learned(column, kind)
+            inputs.append(
+                ScoringInput(
+                    column=column,
+                    kind=kind,
+                    typical=value_text(numbers[column]),
+                    typical_choice=None,
+                    choices=None,
+                )
+            )
         else:
-            typical = categories[column]
-            choices = [
-                Choice(value=value or "", label=value or NOT_GIVEN) for value in values[column]
-            ]
-        inputs.append(
-            ScoringInput(column=column, kind=kind, typical=value_text(typical), choices=choices)
-        )
-    return ScoringForm(
-        training_run_id=run.id,
-        trained_at=run.trained_at,
-        data_source=advertiser.data_source,
-        typical_deal_size=_typical_deal_size(mapping),
-        inputs=inputs,
-    )
+            if column not in categories:
+                _not_learned(column, kind)
+            inputs.append(
+                ScoringInput(
+                    column=column,
+                    kind=kind,
+                    typical=value_text(categories[column]),
+                    typical_choice=categories[column] or "",
+                    choices=[
+                        Choice(value=value or "", label=value or NOT_GIVEN)
+                        for value in values[column]
+                    ],
+                )
+            )
+    return ScoringForm(inputs=inputs)
 
 
 @router.post(
@@ -129,50 +143,54 @@ def score_lead(
     clock: ClockDep,
 ) -> ScoredLead:
     """The entered lead's Submit score and Score explanation, from the latest Training run."""
-    advertiser, run, model, mapping = _latest(session, advertiser_id, store)
-    inputs = mapping.leads
+    advertiser, model, mapping = _latest(session, advertiser_id, store)
+    columns = mapping.leads
     for column in entered.inputs:
-        if column not in inputs.inputs:
+        if column not in columns.inputs:
             _refuse(f"“{column}” is not an input to the score.")
-    for column in inputs.inputs:
+    for column in columns.inputs:
         if column not in entered.inputs:
             _refuse(f"Enter every input; “{column}” is missing.")
-    assert inputs.lead_id is not None and inputs.submitted_at is not None, "confirmed Mapping"
+    # Never so for a confirmed Mapping, which every Training run has.
+    if columns.lead_id is None or columns.submitted_at is None or not mapping.typical_deal_size:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "The Mapping marks no lead identifier, submission time or Typical deal size, so no "
+            "lead can be scored.",
+        )
     cells = {
         **entered.inputs,
-        inputs.lead_id: ENTERED_LEAD,
-        inputs.submitted_at: clock.now().isoformat(),
+        columns.lead_id: ENTERED_LEAD,
+        columns.submitted_at: clock.now().isoformat(),
     }
     try:
         lead = format_lead(cells, mapping)
-        scored = score(model, lead, list(inputs.inputs), _typical_deal_size(mapping))
+        scored = score(model, lead, columns.inputs, mapping.typical_deal_size)
+    except NoChance as problem:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(problem)) from problem
     except (Unreadable, Refused) as problem:
         _refuse(str(problem))
-    return ScoredLead(
-        training_run_id=run.id,
-        data_source=advertiser.data_source,
-        chance_of_winning=scored.chance_of_winning,
-        typical_deal_size=scored.typical_deal_size,
-        lead_score=scored.lead_score,
-        explanation=scored.explanation,
-    )
+    return ScoredLead(**dict(scored), data_source=advertiser.data_source)
 
 
 def _latest(
     session: Session, advertiser_id: uuid.UUID, store: ObjectStore
-) -> tuple[records.Advertiser, records.TrainingRun, Model, Mapping]:
+) -> tuple[records.Advertiser, Model, Mapping]:
     advertiser = find_advertiser(session, advertiser_id)
     latest = latest_run(session, advertiser, store)
     # A Training run is made only from a confirmed Mapping, which never changes after.
     if latest is None or advertiser.mapping is None:
         raise HTTPException(status.HTTP_409_CONFLICT, NO_TRAINING_RUN)
-    run, model = latest
-    return advertiser, run, model, Mapping.model_validate(advertiser.mapping.content)
+    _, model = latest
+    return advertiser, model, Mapping.model_validate(advertiser.mapping.content)
 
 
-def _typical_deal_size(mapping: Mapping) -> float:
-    assert mapping.typical_deal_size is not None, "a confirmed Mapping has a Typical deal size"
-    return mapping.typical_deal_size
+def _not_learned(column: str, kind: ColumnKind) -> NoReturn:
+    raise HTTPException(
+        status.HTTP_409_CONFLICT,
+        f"“{column}” is not an input the latest Training run learned from as a {kind}. "
+        "Train again.",
+    )
 
 
 def _refuse(detail: str) -> NoReturn:

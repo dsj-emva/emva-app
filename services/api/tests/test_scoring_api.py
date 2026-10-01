@@ -2,12 +2,26 @@
 training; the entered lead goes through the same Formatter and Features as training, then the
 latest Training run's model. Nothing about the lead is stored."""
 
+import csv
+import io
 import math
+from collections.abc import Iterator
 
 import pytest
 from fastapi.testclient import TestClient
-from test_formatting_api import confirm, map_hand_made
+from sqlalchemy import create_engine, inspect, text
+from test_formatting_api import confirm, map_hand_made, upload
+from test_hand_made_upload import HAND_MADE, HAND_MADE_MAPPING
 from test_training_api import train
+
+from emva_api.clock import FixedClock
+from emva_api.csv_file import read_csv
+from emva_api.formatter import format_files
+from emva_api.main import create_app
+from emva_api.mapping import ConfirmedMapping, Mapping
+from emva_api.model import Model
+from emva_api.personal_data import hashed_identifier
+from emva_api.settings import Settings
 
 NOT_GIVEN = {"value": "", "label": "not given"}
 A_LEAD = {
@@ -41,12 +55,7 @@ def test_the_form_is_the_mappings_inputs_with_the_categories_seen_in_training(
     form = scoring_form(client, trained)
 
     assert form.status_code == 200, form.text
-    body = form.json()
-    assert body["typical_deal_size"] == 12000.0
-    assert body["data_source"] == "hand_made_test"
-    training_run = client.get(f"/advertisers/{trained}/training").json()["latest"]["id"]
-    assert body["training_run_id"] == training_run
-    inputs = body["inputs"]
+    inputs = form.json()["inputs"]
     assert [(i["column"], i["kind"]) for i in inputs] == [
         ("Enquiry Channel", "category"),
         ("Trip Type", "category"),
@@ -62,8 +71,8 @@ def test_the_form_is_the_mappings_inputs_with_the_categories_seen_in_training(
         "Phone",
         "Partner agent",
     ]
-    assert inputs[0]["typical"] == "Web form"
-    assert inputs[2]["choices"] is None
+    assert (inputs[0]["typical"], inputs[0]["typical_choice"]) == ("Web form", "Web form")
+    assert (inputs[2]["choices"], inputs[2]["typical_choice"]) == (None, None)
     assert all(NOT_GIVEN not in i["choices"] for i in inputs[:2])
 
 
@@ -155,3 +164,121 @@ def test_scoring_is_refused_before_a_training_run(client: TestClient):
     form = scoring_form(client, advertiser)
     assert (form.status_code, form.json()["detail"]) == (409, because)
     refused(client, advertiser, A_LEAD, 409, because)
+
+
+def hand_made_rows() -> list[dict[str, str]]:
+    return list(csv.DictReader(io.StringIO((HAND_MADE / "leads.csv").read_text())))
+
+
+def test_an_entered_lead_gets_exactly_the_chance_training_gives_the_same_lead(
+    client: TestClient, trained: str, bucket
+):
+    run = client.get(f"/advertisers/{trained}/training").json()["latest"]["id"]
+    model = Model.model_validate_json(
+        bucket.Object(f"advertisers/{trained}/training-runs/{run}.json").get()["Body"].read()
+    )
+    mapping = ConfirmedMapping(Mapping.model_validate(HAND_MADE_MAPPING), model.as_of)
+    tables = [read_csv((HAND_MADE / n).read_bytes()) for n in ("leads.csv", "stage_history.csv")]
+    formatted = {lead.identifier_hash: lead for lead in format_files(*tables, mapping).leads}
+
+    # One with every number given and one without a budget.
+    for row in [r for r in hand_made_rows() if r["Lead ID"] in ("L-1001", "L-1008")]:
+        inputs = {column: row[column] for column in HAND_MADE_MAPPING["leads"]["inputs"]}
+        scored = score(client, trained, inputs)
+
+        assert scored.status_code == 200, scored.text
+        trained_lead = formatted[hashed_identifier(row["Lead ID"])]
+        assert scored.json()["chance_of_winning"] == model.chance_of_winning(trained_lead)
+
+
+@pytest.fixture
+def own_client(own_settings: Settings, clock: FixedClock) -> Iterator[TestClient]:
+    with TestClient(create_app(own_settings, clock)) as client:
+        yield client
+
+
+def everything_stored(settings: Settings, bucket) -> tuple[dict[str, int], list[str]]:
+    engine = create_engine(settings.database_url)
+    with engine.connect() as connection:
+        counts = {
+            table: connection.execute(text(f'SELECT count(*) FROM "{table}"')).scalar_one()
+            for table in inspect(connection).get_table_names()
+        }
+    engine.dispose()
+    return counts, sorted(o.key for o in bucket.objects.all())
+
+
+def test_scoring_a_lead_stores_nothing(own_client: TestClient, own_settings: Settings, own_bucket):
+    advertiser = map_hand_made(own_client)
+    confirm(own_client, advertiser)
+    train(own_client, advertiser)
+    before = everything_stored(own_settings, own_bucket)
+
+    assert score(own_client, advertiser, A_LEAD).status_code == 200
+    assert score(own_client, advertiser, {**A_LEAD, "Trip Type": "Cruise"}).status_code == 400
+
+    assert everything_stored(own_settings, own_bucket) == before
+
+
+def test_a_category_some_training_leads_did_not_give_can_be_scored_as_not_given(
+    client: TestClient,
+):
+    rows = hand_made_rows()
+    for row in rows[1:8]:
+        row["Enquiry Channel"] = ""
+    leads = io.StringIO()
+    writer = csv.DictWriter(leads, fieldnames=list(rows[0]))
+    writer.writeheader()
+    writer.writerows(rows)
+    advertiser = client.post(
+        "/advertisers", json={"name": "Blank channels", "data_source": "hand_made_test"}
+    ).json()["id"]
+    upload(client, advertiser, "leads", leads.getvalue())
+    upload(client, advertiser, "stage-history", (HAND_MADE / "stage_history.csv").read_text())
+    assert (
+        client.put(f"/advertisers/{advertiser}/mapping", json=HAND_MADE_MAPPING).json()["problems"]
+        == []
+    )
+    confirm(client, advertiser)
+    assert train(client, advertiser).status_code == 201
+
+    [channel] = [
+        i
+        for i in scoring_form(client, advertiser).json()["inputs"]
+        if i["column"] == "Enquiry Channel"
+    ]
+    assert NOT_GIVEN in channel["choices"]
+    scored = score(client, advertiser, {**A_LEAD, "Enquiry Channel": ""})
+
+    assert scored.status_code == 200, scored.text
+    step = scored.json()["explanation"]["steps"][0]
+    assert (step["input"], step["value"]) == ("Enquiry Channel", "not given")
+
+
+def test_scoring_is_refused_when_no_lead_finished_any_transition(client: TestClient):
+    """Ruling 13's one refusal: about the Training run, not the lead, so a conflict like having
+    no Training run."""
+    rows = hand_made_rows()
+    history = ["Lead ID,Stage,Changed At,Deal Value,Changed By"]
+    history += [f"{r['Lead ID']},New enquiry,2024-01-04 09:12,,system" for r in rows[:20]]
+    # The only win belongs to a lead the leads file does not have, so it is not kept.
+    history.append("L-9999,Closed won,2024-02-01 10:00,9000,AK")
+    advertiser = client.post(
+        "/advertisers", json={"name": "No history", "data_source": "hand_made_test"}
+    ).json()["id"]
+    upload(client, advertiser, "leads", (HAND_MADE / "leads.csv").read_text())
+    upload(client, advertiser, "stage-history", "\n".join(history) + "\n")
+    assert (
+        client.put(f"/advertisers/{advertiser}/mapping", json=HAND_MADE_MAPPING).json()["problems"]
+        == []
+    )
+    confirm(client, advertiser)
+    assert train(client, advertiser).status_code == 201
+
+    refused(
+        client,
+        advertiser,
+        A_LEAD,
+        409,
+        "No lead has made or failed any Transition yet, so no chance is known.",
+    )

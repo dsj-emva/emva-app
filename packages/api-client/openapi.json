@@ -653,7 +653,8 @@
             "type": "number"
           },
           "data_source": {
-            "$ref": "#/components/schemas/DataSource"
+            "$ref": "#/components/schemas/DataSource",
+            "description": "Where the data the model learned from came from"
           },
           "explanation": {
             "$ref": "#/components/schemas/Explanation"
@@ -663,11 +664,6 @@
             "title": "Lead Score",
             "type": "number"
           },
-          "training_run_id": {
-            "format": "uuid",
-            "title": "Training Run Id",
-            "type": "string"
-          },
           "typical_deal_size": {
             "description": "The size the Lead score used",
             "title": "Typical Deal Size",
@@ -675,21 +671,17 @@
           }
         },
         "required": [
-          "training_run_id",
-          "data_source",
           "chance_of_winning",
           "typical_deal_size",
           "lead_score",
-          "explanation"
+          "explanation",
+          "data_source"
         ],
         "title": "ScoredLead",
         "type": "object"
       },
       "ScoringForm": {
         "properties": {
-          "data_source": {
-            "$ref": "#/components/schemas/DataSource"
-          },
           "inputs": {
             "description": "The Mapping's inputs, in its order",
             "items": {
@@ -697,27 +689,9 @@
             },
             "title": "Inputs",
             "type": "array"
-          },
-          "trained_at": {
-            "format": "date-time",
-            "title": "Trained At",
-            "type": "string"
-          },
-          "training_run_id": {
-            "format": "uuid",
-            "title": "Training Run Id",
-            "type": "string"
-          },
-          "typical_deal_size": {
-            "title": "Typical Deal Size",
-            "type": "number"
           }
         },
         "required": [
-          "training_run_id",
-          "trained_at",
-          "data_source",
-          "typical_deal_size",
           "inputs"
         ],
         "title": "ScoringForm",
@@ -752,12 +726,25 @@
             "description": "The typical lead's value: the training mean or most common",
             "title": "Typical",
             "type": "string"
+          },
+          "typical_choice": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The value of the typical lead's choice, for a category; null for a number",
+            "title": "Typical Choice"
           }
         },
         "required": [
           "column",
           "kind",
           "typical",
+          "typical_choice",
           "choices"
         ],
         "title": "ScoringInput",
@@ -1747,7 +1734,7 @@
                 }
               }
             },
-            "description": "The lead cannot be scored: an input missing, unreadable or unseen in training, or no chance known"
+            "description": "The lead cannot be scored: an input missing, unreadable or unseen in training"
           },
           "404": {
             "content": {
@@ -1767,7 +1754,7 @@
                 }
               }
             },
-            "description": "No Training run yet"
+            "description": "No Training run yet, or none from which a chance can be known"
           },
           "422": {
             "content": {
@@ -1838,7 +1825,7 @@
                 }
               }
             },
-            "description": "No Training run yet"
+            "description": "No Training run yet, or none from which a chance can be known"
           },
           "422": {
             "content": {

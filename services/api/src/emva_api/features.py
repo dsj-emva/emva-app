@@ -30,6 +30,9 @@ class NumberInput(BaseModel):
     column: str
     mean: float
     sd: float
+    # False when no training lead gave it, so its mean stands for nothing; a model kept before
+    # this was recorded reads as given.
+    any_given: bool = True
 
 
 class CategoryInput(BaseModel):
@@ -49,10 +52,10 @@ class Features(BaseModel):
     categories: tuple[CategoryInput, ...]
 
     def typical(self) -> tuple[dict[str, float | None], dict[str, str | None]]:
-        """The typical lead's inputs: every number at its training mean, given, and every
-        category at its most common training value."""
+        """The typical lead's inputs: every number at its training mean, given (not given when
+        no training lead gave it), and every category at its most common training value."""
         return (
-            {number.column: number.mean for number in self.numbers},
+            {number.column: number.mean if number.any_given else None for number in self.numbers},
             {category.column: category.values[0] for category in self.categories},
         )
 
@@ -89,6 +92,7 @@ def fit_features(leads: Sequence[FormattedLead]) -> Features:
                 column=column,
                 mean=statistics.fmean(given) if given else 0.0,
                 sd=sd or 1.0,
+                any_given=bool(given),
             )
         )
     categories = [

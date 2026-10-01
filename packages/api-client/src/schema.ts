@@ -520,6 +520,7 @@ export interface components {
         ScoredLead: {
             /** Chance Of Winning */
             chance_of_winning: number;
+            /** @description Where the data the model learned from came from */
             data_source: components["schemas"]["DataSource"];
             explanation: components["schemas"]["Explanation"];
             /**
@@ -528,11 +529,6 @@ export interface components {
              */
             lead_score: number;
             /**
-             * Training Run Id
-             * Format: uuid
-             */
-            training_run_id: string;
-            /**
              * Typical Deal Size
              * @description The size the Lead score used
              */
@@ -540,24 +536,11 @@ export interface components {
         };
         /** ScoringForm */
         ScoringForm: {
-            data_source: components["schemas"]["DataSource"];
             /**
              * Inputs
              * @description The Mapping's inputs, in its order
              */
             inputs: components["schemas"]["ScoringInput"][];
-            /**
-             * Trained At
-             * Format: date-time
-             */
-            trained_at: string;
-            /**
-             * Training Run Id
-             * Format: uuid
-             */
-            training_run_id: string;
-            /** Typical Deal Size */
-            typical_deal_size: number;
         };
         /** ScoringInput */
         ScoringInput: {
@@ -577,6 +560,11 @@ export interface components {
              * @description The typical lead's value: the training mean or most common
              */
             typical: string;
+            /**
+             * Typical Choice
+             * @description The value of the typical lead's choice, for a category; null for a number
+             */
+            typical_choice: string | null;
         };
         /**
          * Stage
@@ -1195,7 +1183,7 @@ export interface operations {
                     "application/json": components["schemas"]["ScoredLead"];
                 };
             };
-            /** @description The lead cannot be scored: an input missing, unreadable or unseen in training, or no chance known */
+            /** @description The lead cannot be scored: an input missing, unreadable or unseen in training */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -1213,7 +1201,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description No Training run yet */
+            /** @description No Training run yet, or none from which a chance can be known */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1271,7 +1259,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description No Training run yet */
+            /** @description No Training run yet, or none from which a chance can be known */
             409: {
                 headers: {
                     [name: string]: unknown;
