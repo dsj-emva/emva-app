@@ -1,8 +1,13 @@
-# Both images build from the repository root; send only what they copy.
+# Both images build from the repository root; send only what they copy, never secrets or data.
 **/node_modules
 **/.venv
 **/__pycache__
 **/dist
+**/*.tsbuildinfo
+.env
+**/.env*
+*.csv
+**/*.csv
 .git
 .claude
 .github
