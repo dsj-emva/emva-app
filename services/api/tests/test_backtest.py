@@ -160,3 +160,30 @@ def test_the_backtest_on_the_hand_made_dataset_reports_its_result_whatever_it_is
     assert counts.scored + counts.no_outcome_yet + sum(r.leads for r in counts.refused) == 80
     assert result.comparison is not None
     assert backtest(leads, NOW) == result
+
+
+def test_the_hand_made_result_already_seen_stays_exactly_as_it_was():
+    """The hand-made result was seen when this Backtest was first built (PR #21); every later
+    change must leave it bit for bit as it was, or it would be tuning."""
+    mapping = ConfirmedMapping(Mapping.model_validate(HAND_MADE_MAPPING), DAY_ONE)
+    tables = [
+        read_csv((HAND_MADE / name).read_bytes()) for name in ("leads.csv", "stage_history.csv")
+    ]
+    leads = format_files(*tables, mapping).leads
+
+    result = backtest(leads, datetime(2026, 9, 14, tzinfo=UTC))
+
+    assert result.slope == 1.218257002071192
+    assert result.comparison is not None
+    assert result.comparison.difference == 0.021831717979490708
+    assert result.comparison.interval_low == -0.00959169631846889
+    assert result.comparison.interval_high == 0.05593456387736267
+    assert result.auc == 0.7175324675324676
+    assert [(g.leads, g.predicted, g.actual) for g in result.groups] == [
+        (12, 0.07622443184822557, 0.08333333333333333),
+        (12, 0.26868678502035964, 0.25),
+        (12, 0.29705090434732245, 0.16666666666666666),
+        (11, 0.3487562586805556, 0.18181818181818182),
+        (11, 0.4321467915120867, 0.5454545454545454),
+    ]
+    assert [c.passed for c in result.checks] == [False, False]
