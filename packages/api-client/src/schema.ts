@@ -826,7 +826,7 @@ export interface components {
         };
         /** TrainingRunView */
         TrainingRunView: {
-            /** @description The run's Backtest; null for a run trained before Backtests were kept */
+            /** @description The run's Backtest; null when its results are unavailable */
             backtest: components["schemas"]["Backtest"] | null;
             /**
              * Data Source
@@ -838,6 +838,11 @@ export interface components {
              * Format: uuid
              */
             id: string;
+            /**
+             * Results Unavailable Because
+             * @description Why the Backtest's results are unavailable; null when they are shown
+             */
+            results_unavailable_because: string | null;
             /**
              * Trained At
              * Format: date-time

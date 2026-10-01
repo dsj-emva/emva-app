@@ -37,6 +37,11 @@ from emva_api.transitions import Transition
 
 router = APIRouter()
 
+TRAINED_BEFORE_BACKTESTS = (
+    "This run was trained before Backtests were kept. Train again to see its results."
+)
+RESULTS_UNREADABLE = "The results of this run's Backtest could not be read from storage. Try again."
+
 
 class TransitionResult(BaseModel):
     transition: Transition
@@ -63,7 +68,10 @@ class TrainingRunView(BaseModel):
         description="The label every number of the run carries, e.g. 'on hand-made test data'"
     )
     backtest: Backtest | None = Field(
-        description="The run's Backtest; null for a run trained before Backtests were kept"
+        description="The run's Backtest; null when its results are unavailable"
+    )
+    results_unavailable_because: str | None = Field(
+        description="Why the Backtest's results are unavailable; null when they are shown"
     )
 
 
@@ -114,24 +122,26 @@ def train_model(
     results = backtest(leads, now)
     run_id = uuid.uuid4()
     keys = f"advertisers/{advertiser.id}/training-runs/{run_id}"
+    model_key, backtest_key = f"{keys}.json", f"{keys}-backtest.json"
     run = records.TrainingRun(
         id=run_id,
         advertiser_id=advertiser.id,
         trained_at=now,
-        model_key=f"{keys}.json",
-        backtest_key=f"{keys}-backtest.json",
+        model_key=model_key,
+        backtest_key=backtest_key,
     )
     try:
-        store.put(run.model_key, model.model_dump_json(indent=2).encode())
-        store.put(f"{keys}-backtest.json", results.model_dump_json(indent=2).encode())
+        store.put(model_key, model.model_dump_json(indent=2).encode())
+        store.put(backtest_key, results.model_dump_json(indent=2).encode())
         session.add(run)
         session.commit()
     except (BotoCoreError, ClientError, SQLAlchemyError) as error:
         session.rollback()
-        # Nothing refers to them now; delete them when storage can be reached.
-        with suppress(BotoCoreError, ClientError):
-            store.delete(f"{keys}.json")
-            store.delete(f"{keys}-backtest.json")
+        # Nothing refers to them now; delete each when storage can be reached, so failing to
+        # delete one never leaves the other behind.
+        for key in (model_key, backtest_key):
+            with suppress(BotoCoreError, ClientError):
+                store.delete(key)
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
             "The model was trained but could not be kept, so nothing was stored. Try again.",
@@ -167,17 +177,12 @@ def _latest(
     if latest is None:
         return None
     run, model = latest
+    if run.backtest_key is None:
+        return _view(advertiser, run, model, None, TRAINED_BEFORE_BACKTESTS)
     try:
-        results = (
-            None
-            if run.backtest_key is None
-            else Backtest.model_validate_json(store.get(run.backtest_key))
-        )
-    except (BotoCoreError, ClientError, MissingObject) as error:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            "The latest Training run's results could not be read from storage. Try again.",
-        ) from error
+        results = Backtest.model_validate_json(store.get(run.backtest_key))
+    except (BotoCoreError, ClientError, MissingObject):
+        return _view(advertiser, run, model, None, RESULTS_UNREADABLE)
     return _view(advertiser, run, model, results)
 
 
@@ -186,6 +191,7 @@ def _view(
     run: records.TrainingRun,
     model: Model,
     results: Backtest | None,
+    results_unavailable_because: str | None = None,
 ) -> TrainingRunView:
     return TrainingRunView(
         id=run.id,
@@ -204,4 +210,5 @@ def _view(
         ],
         data_source=advertiser.data_source.label,
         backtest=results,
+        results_unavailable_because=results_unavailable_because,
     )

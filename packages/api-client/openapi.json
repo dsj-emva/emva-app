@@ -1314,7 +1314,7 @@
                 "type": "null"
               }
             ],
-            "description": "The run's Backtest; null for a run trained before Backtests were kept"
+            "description": "The run's Backtest; null when its results are unavailable"
           },
           "data_source": {
             "description": "The label every number of the run carries, e.g. 'on hand-made test data'",
@@ -1325,6 +1325,18 @@
             "format": "uuid",
             "title": "Id",
             "type": "string"
+          },
+          "results_unavailable_because": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the Backtest's results are unavailable; null when they are shown",
+            "title": "Results Unavailable Because"
           },
           "trained_at": {
             "format": "date-time",
@@ -1345,7 +1357,8 @@
           "trained_at",
           "transitions",
           "data_source",
-          "backtest"
+          "backtest",
+          "results_unavailable_because"
         ],
         "title": "TrainingRunView",
         "type": "object"
