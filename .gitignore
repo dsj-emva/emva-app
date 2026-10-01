@@ -43,3 +43,6 @@ __pycache__/
 !.claude/skills/**/data/
 !.claude/skills/**/*.csv
 !.claude/skills/**/*.jsonl
+
+# The hand-made test dataset is written by hand and lives with the service tests
+!services/api/tests/hand_made/*.csv

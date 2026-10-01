@@ -21,7 +21,6 @@ from emva_api.main import create_app
 from emva_api.settings import Settings
 
 SERVICE = Path(__file__).parents[1]
-HAND_MADE = Path(__file__).parent / "hand_made"
 
 
 @pytest.fixture(scope="session")
