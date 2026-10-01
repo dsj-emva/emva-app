@@ -33,6 +33,12 @@ SLOPE_LOW, SLOPE_HIGH = 0.8, 1.2
 # coefficient by more than this; otherwise, after MAX_STEPS, there is no slope.
 STEP_TOLERANCE = 1e-10
 MAX_STEPS = 100
+# The bootstrap draws its resamples a block at a time, each block of at most this many lead
+# indices, so memory stays bounded however many leads there are. The stream of draws is the
+# same as drawing every resample at once.
+CHUNK_ELEMENTS = 1_000_000
+
+NOT_GATED = "AUC: the chance a won lead is ranked above a lost one. Reported, not gated."
 
 RULES = (
     f"Leads are put in order of submission and cut into {FOLDS} consecutive folds of equal "
@@ -44,12 +50,37 @@ RULES = (
     "had an Outcome at the fold's start: every lead sent alike.",
     f"Calibration groups: leads in order of predicted chance, cut into deciles when there are "
     f"at least {MAX_GROUPS * MIN_PER_GROUP}, otherwise into as many groups of at least "
-    f"{MIN_PER_GROUP} as there are.",
+    f"{MIN_PER_GROUP} as there are; with fewer than {MIN_PER_GROUP}, one group of them all. "
+    "Leads with the same predicted chance stay in the order they were scored, which is the "
+    "order of submission.",
     f"Calibration slope: the unpenalised logistic regression of the Outcome on the log-odds of "
     f"the predicted chance, clipped to between {EPSILON} and {1 - EPSILON}.",
     f"Brier difference: the status quo's Brier score minus Emva's, per lead, so above zero means "
     f"Emva is more accurate. Its 95% interval is a bootstrap over leads, {RESAMPLES} resamples "
     f"with the fixed seed {SEED}.",
+    NOT_GATED,
+)
+
+
+class Wording(BaseModel):
+    """What the screen says beside the numbers, so every rule is stated by the service."""
+
+    model_config = ConfigDict(frozen=True)
+
+    calibration: str
+    comparison: str
+    better_side: str = Field(description="Which side of zero means Emva is the more accurate")
+    auc: str
+
+
+WORDING = Wording(
+    calibration="Each dot is a group of leads with similar predicted chances. Dots on the "
+    "diagonal won as often as predicted.",
+    comparison="The difference is the status quo's Brier score minus Emva's, lead by lead: above "
+    "zero, Emva is the more accurate. The Status-quo signal sends every lead alike, at the win "
+    "rate of the leads before it.",
+    better_side="Above zero: Emva more accurate",
+    auc=NOT_GATED,
 )
 
 
@@ -73,6 +104,14 @@ class Comparison(BaseModel):
     difference: float = Field(description="Status quo's Brier score minus Emva's, per lead")
     interval_low: float
     interval_high: float
+
+
+@dataclass(frozen=True)
+class Slope:
+    """The calibration slope, or why there is none."""
+
+    value: float | None
+    missing_because: str | None = None
 
 
 class Check(BaseModel):
@@ -122,9 +161,11 @@ class Backtest(BaseModel):
     folds: tuple[FoldResult, ...]
     groups: tuple[Group, ...]
     slope: float | None = Field(description="Null when it cannot be fitted on the leads scored")
+    slope_missing_because: str | None = Field(description="Why there is no slope; null with one")
     comparison: Comparison | None = Field(description="Null when no lead was scored")
     auc: float | None = Field(description="Null unless both won and lost leads were scored")
     checks: tuple[Check, ...]
+    wording: Wording
 
     @computed_field(description="Whether every check of the Trust gate passed")
     @property
@@ -213,10 +254,12 @@ def backtest(leads: Sequence[FormattedLead], now: datetime) -> Backtest:
             for fold in folds
         ),
         groups=tuple(calibration_groups(predicted, won)),
-        slope=slope,
+        slope=slope.value,
+        slope_missing_because=slope.missing_because,
         comparison=comparison,
         auc=auc(predicted, won),
-        checks=trust_gate(slope, comparison.interval_low if comparison else None),
+        checks=trust_gate(slope.value, comparison.interval_low if comparison else None),
+        wording=WORDING,
     )
 
 
@@ -239,11 +282,18 @@ def trust_gate(slope: float | None, interval_low: float | None) -> tuple[Check, 
 
 def calibration_groups(predicted: Sequence[float], won: Sequence[bool]) -> list[Group]:
     """Leads in order of predicted chance, cut into deciles when there are enough for ten in
-    each, otherwise into as many groups of at least MIN_PER_GROUP as there are."""
+    each, otherwise into as many groups of at least MIN_PER_GROUP as there are, and with fewer
+    than MIN_PER_GROUP into one. Leads with the same chance keep the order given."""
     if not predicted:
         return []
     count = max(1, min(MAX_GROUPS, len(predicted) // MIN_PER_GROUP))
-    ranked = sorted(zip(predicted, won, strict=True), key=lambda pair: pair[0])
+    ranked = [
+        (p, w)
+        for _, p, w in sorted(
+            zip(range(len(predicted)), predicted, won, strict=True),
+            key=lambda lead: (lead[1], lead[0]),
+        )
+    ]
     return [
         Group(
             leads=len(group),
@@ -254,12 +304,23 @@ def calibration_groups(predicted: Sequence[float], won: Sequence[bool]) -> list[
     ]
 
 
-def calibration_slope(predicted: Sequence[float], won: Sequence[bool]) -> float | None:
+SEPARATED = (
+    "The fit did not converge: the predicted chances separate won from lost leads "
+    "(near-)perfectly, so no finite slope fits them."
+)
+
+
+def calibration_slope(predicted: Sequence[float], won: Sequence[bool]) -> Slope:
     """The coefficient of the unpenalised logistic regression of the Outcome on the log-odds of
-    the clipped predicted chance; None when it has no finite fit (predictions all alike, one
-    Outcome only, or Outcomes perfectly separated by the prediction)."""
-    if len(set(predicted)) < 2 or len(set(won)) < 2:
-        return None
+    the clipped predicted chance, or why it has no finite fit."""
+    if not predicted:
+        return Slope(None, "No lead was scored.")
+    if len(set(predicted)) < 2:
+        return Slope(
+            None, "Every lead scored has the same predicted chance, so no slope can be fitted."
+        )
+    if len(set(won)) < 2:
+        return Slope(None, "The leads scored were all won or all lost, so no slope can be fitted.")
     clipped = np.clip(np.asarray(predicted, dtype=float), EPSILON, 1 - EPSILON)
     x = np.column_stack([np.ones(len(clipped)), np.log(clipped / (1 - clipped))])
     y = np.asarray(won, dtype=float)
@@ -270,13 +331,13 @@ def calibration_slope(predicted: Sequence[float], won: Sequence[bool]) -> float 
         try:
             step = np.linalg.solve(hessian, x.T @ (y - mu))
         except np.linalg.LinAlgError:
-            return None
+            return Slope(None, SEPARATED)
         if not np.all(np.isfinite(step)):
-            return None
+            return Slope(None, SEPARATED)
         beta = beta + step
         if np.max(np.abs(step)) < STEP_TOLERANCE:
-            return float(beta[1])
-    return None
+            return Slope(float(beta[1]))
+    return Slope(None, SEPARATED)
 
 
 def brier_comparison(
@@ -288,8 +349,17 @@ def brier_comparison(
     emva = (np.asarray(predicted, dtype=float) - y) ** 2
     usual = (np.asarray(status_quo, dtype=float) - y) ** 2
     differences = usual - emva
-    resampled = np.random.default_rng(SEED).integers(0, len(y), size=(RESAMPLES, len(y)))
-    low, high = np.quantile(differences[resampled].mean(axis=1), [0.025, 0.975])
+    rng = np.random.default_rng(SEED)
+    per_block = max(1, CHUNK_ELEMENTS // len(y))
+    means = np.concatenate(
+        [
+            differences[
+                rng.integers(0, len(y), size=(min(per_block, RESAMPLES - start), len(y)))
+            ].mean(axis=1)
+            for start in range(0, RESAMPLES, per_block)
+        ]
+    )
+    low, high = np.quantile(means, [0.025, 0.975])
     return Comparison(
         emva_brier=float(emva.mean()),
         status_quo_brier=float(usual.mean()),
@@ -301,13 +371,19 @@ def brier_comparison(
 
 def auc(predicted: Sequence[float], won: Sequence[bool]) -> float | None:
     """The share of pairs of a won and a lost lead in which the won lead has the higher
-    predicted chance, a tie counting half; None without both."""
-    wins = [p for p, w in zip(predicted, won, strict=True) if w]
-    losses = [p for p, w in zip(predicted, won, strict=True) if not w]
+    predicted chance, a tie counting half; None without both. Counted by ranks (Mann-Whitney U),
+    tied predictions sharing their mean rank."""
+    chances = np.asarray(predicted, dtype=float)
+    is_won = np.asarray(won, dtype=bool)
+    wins = int(is_won.sum())
+    losses = len(is_won) - wins
     if not wins or not losses:
         return None
-    right = sum((w > lost) + 0.5 * (w == lost) for w in wins for lost in losses)
-    return right / (len(wins) * len(losses))
+    _, place, counts = np.unique(chances, return_inverse=True, return_counts=True)
+    last = np.cumsum(counts)
+    mean_rank = last - (counts - 1) / 2
+    right = float(mean_rank[place][is_won].sum()) - wins * (wins + 1) / 2
+    return right / (wins * losses)
 
 
 def _outcome(lead: FormattedLead, at: datetime) -> bool | None:

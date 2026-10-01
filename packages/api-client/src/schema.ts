@@ -281,6 +281,12 @@ export interface components {
              * @description Null when it cannot be fitted on the leads scored
              */
             slope: number | null;
+            /**
+             * Slope Missing Because
+             * @description Why there is no slope; null with one
+             */
+            slope_missing_because: string | null;
+            wording: components["schemas"]["Wording"];
         };
         /**
          * Check
@@ -915,6 +921,23 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * Wording
+         * @description What the screen says beside the numbers, so every rule is stated by the service.
+         */
+        Wording: {
+            /** Auc */
+            auc: string;
+            /**
+             * Better Side
+             * @description Which side of zero means Emva is the more accurate
+             */
+            better_side: string;
+            /** Calibration */
+            calibration: string;
+            /** Comparison */
+            comparison: string;
         };
     };
     responses: never;

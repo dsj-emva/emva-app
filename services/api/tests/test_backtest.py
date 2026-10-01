@@ -141,6 +141,7 @@ def test_with_too_few_leads_nothing_is_scored_and_both_checks_fail():
 
     assert result.counts.scored == 0
     assert (result.slope, result.comparison, result.auc) == (None, None, None)
+    assert result.slope_missing_because == "No lead was scored."
     assert [c.passed for c in result.checks] == [False, False]
     assert not result.passed
 

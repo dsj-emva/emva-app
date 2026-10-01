@@ -145,6 +145,21 @@
             ],
             "description": "Null when it cannot be fitted on the leads scored",
             "title": "Slope"
+          },
+          "slope_missing_because": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why there is no slope; null with one",
+            "title": "Slope Missing Because"
+          },
+          "wording": {
+            "$ref": "#/components/schemas/Wording"
           }
         },
         "required": [
@@ -154,9 +169,11 @@
           "folds",
           "groups",
           "slope",
+          "slope_missing_because",
           "comparison",
           "auc",
           "checks",
+          "wording",
           "passed"
         ],
         "title": "Backtest",
@@ -1481,6 +1498,36 @@
           "type"
         ],
         "title": "ValidationError",
+        "type": "object"
+      },
+      "Wording": {
+        "description": "What the screen says beside the numbers, so every rule is stated by the service.",
+        "properties": {
+          "auc": {
+            "title": "Auc",
+            "type": "string"
+          },
+          "better_side": {
+            "description": "Which side of zero means Emva is the more accurate",
+            "title": "Better Side",
+            "type": "string"
+          },
+          "calibration": {
+            "title": "Calibration",
+            "type": "string"
+          },
+          "comparison": {
+            "title": "Comparison",
+            "type": "string"
+          }
+        },
+        "required": [
+          "calibration",
+          "comparison",
+          "better_side",
+          "auc"
+        ],
+        "title": "Wording",
         "type": "object"
       }
     }
