@@ -21,6 +21,19 @@
               }
             ]
           },
+          "mapping_confirmed_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "When the mapping was confirmed; from then on the files cannot be replaced",
+            "title": "Mapping Confirmed At"
+          },
           "name": {
             "title": "Name",
             "type": "string"
@@ -47,7 +60,8 @@
           "data_source",
           "leads_file",
           "stage_history_file",
-          "review_available"
+          "review_available",
+          "mapping_confirmed_at"
         ],
         "title": "Advertiser",
         "type": "object"
@@ -183,21 +197,21 @@
         "title": "Health",
         "type": "object"
       },
-      "LadderPlace": {
+      "InputKindChoice": {
         "properties": {
-          "name": {
-            "title": "Name",
-            "type": "string"
+          "kind": {
+            "$ref": "#/components/schemas/ColumnKind"
           },
-          "place": {
-            "$ref": "#/components/schemas/Place"
+          "label": {
+            "title": "Label",
+            "type": "string"
           }
         },
         "required": [
-          "place",
-          "name"
+          "kind",
+          "label"
         ],
-        "title": "LadderPlace",
+        "title": "InputKindChoice",
         "type": "object"
       },
       "LeadsColumns": {
@@ -274,18 +288,40 @@
         "title": "LeadsColumns",
         "type": "object"
       },
-      "Lost": {
+      "LeadsRole": {
+        "description": "What a leads-file column can hold besides an input; each is a field of LeadsColumns.",
         "enum": [
-          "lost"
+          "lead_id",
+          "submitted_at",
+          "name",
+          "email",
+          "phone"
         ],
-        "title": "Lost",
+        "title": "LeadsRole",
         "type": "string"
+      },
+      "LeadsRoleChoice": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/LeadsRole"
+          }
+        },
+        "required": [
+          "role",
+          "label"
+        ],
+        "title": "LeadsRoleChoice",
+        "type": "object"
       },
       "Mapping": {
         "properties": {
           "crm_stages": {
             "additionalProperties": {
-              "$ref": "#/components/schemas/Place"
+              "$ref": "#/components/schemas/StageOrLost"
             },
             "description": "Where each CRM stage name sits: a Stage, or Lost",
             "title": "Crm Stages",
@@ -339,16 +375,24 @@
             "title": "Crm Stages",
             "type": "array"
           },
+          "input_kinds": {
+            "description": "How an input column can be read",
+            "items": {
+              "$ref": "#/components/schemas/InputKindChoice"
+            },
+            "title": "Input Kinds",
+            "type": "array"
+          },
+          "leads_roles": {
+            "description": "What a leads-file column can hold",
+            "items": {
+              "$ref": "#/components/schemas/LeadsRoleChoice"
+            },
+            "title": "Leads Roles",
+            "type": "array"
+          },
           "mapping": {
             "$ref": "#/components/schemas/Mapping"
-          },
-          "places": {
-            "description": "Where a CRM stage can be placed: the Canonical ladder in order, then Lost",
-            "items": {
-              "$ref": "#/components/schemas/LadderPlace"
-            },
-            "title": "Places",
-            "type": "array"
           },
           "problems": {
             "description": "Why it cannot be confirmed yet; empty once it can",
@@ -357,6 +401,22 @@
             },
             "title": "Problems",
             "type": "array"
+          },
+          "stage_history_roles": {
+            "description": "What a stage-history column can hold",
+            "items": {
+              "$ref": "#/components/schemas/StageHistoryRoleChoice"
+            },
+            "title": "Stage History Roles",
+            "type": "array"
+          },
+          "stages_and_lost": {
+            "description": "What a CRM stage can be placed on: the Canonical ladder in order, then Lost",
+            "items": {
+              "$ref": "#/components/schemas/StageOrLostChoice"
+            },
+            "title": "Stages And Lost",
+            "type": "array"
           }
         },
         "required": [
@@ -364,7 +424,10 @@
           "confirmed_at",
           "problems",
           "crm_stages",
-          "places"
+          "leads_roles",
+          "stage_history_roles",
+          "input_kinds",
+          "stages_and_lost"
         ],
         "title": "MappingReview",
         "type": "object"
@@ -387,16 +450,6 @@
         ],
         "title": "NewAdvertiser",
         "type": "object"
-      },
-      "Place": {
-        "anyOf": [
-          {
-            "$ref": "#/components/schemas/Stage"
-          },
-          {
-            "$ref": "#/components/schemas/Lost"
-          }
-        ]
       },
       "Problem": {
         "properties": {
@@ -473,6 +526,62 @@
           }
         },
         "title": "StageHistoryColumns",
+        "type": "object"
+      },
+      "StageHistoryRole": {
+        "description": "What a stage-history column can hold; each is a field of StageHistoryColumns.",
+        "enum": [
+          "lead_id",
+          "crm_stage",
+          "changed_at",
+          "deal_value"
+        ],
+        "title": "StageHistoryRole",
+        "type": "string"
+      },
+      "StageHistoryRoleChoice": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "role": {
+            "$ref": "#/components/schemas/StageHistoryRole"
+          }
+        },
+        "required": [
+          "role",
+          "label"
+        ],
+        "title": "StageHistoryRoleChoice",
+        "type": "object"
+      },
+      "StageOrLost": {
+        "anyOf": [
+          {
+            "$ref": "#/components/schemas/Stage"
+          },
+          {
+            "const": "lost",
+            "type": "string"
+          }
+        ]
+      },
+      "StageOrLostChoice": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/StageOrLost"
+          }
+        },
+        "required": [
+          "value",
+          "name"
+        ],
+        "title": "StageOrLostChoice",
         "type": "object"
       },
       "ValidationError": {

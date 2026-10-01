@@ -5,6 +5,7 @@ Pure: no I/O.
 """
 
 import enum
+from typing import Final, Literal
 
 
 class Stage(enum.StrEnum):
@@ -18,20 +19,16 @@ class Stage(enum.StrEnum):
     WON = "won"
 
 
-class Lost(enum.StrEnum):
-    LOST = "lost"
-
-
-LOST = Lost.LOST
+LOST: Final = "lost"
 
 LADDER: tuple[Stage, ...] = tuple(Stage)
 
-type Place = Stage | Lost
+type StageOrLost = Stage | Literal["lost"]
 
-# Every place a CRM stage can be put, in the order a person is offered them.
-PLACES: tuple[Place, ...] = (*LADDER, LOST)
+# What a CRM stage can be placed on, in the order a person is offered them.
+STAGES_AND_LOST: tuple[StageOrLost, ...] = (*LADDER, LOST)
 
-_NAMES: dict[Place, str] = {
+_NAMES: dict[StageOrLost, str] = {
     Stage.SUBMITTED: "Submitted",
     Stage.CONTACT_ATTEMPTED: "Contact attempted",
     Stage.ENGAGED: "Engaged",
@@ -42,5 +39,5 @@ _NAMES: dict[Place, str] = {
 }
 
 
-def place_name(place: Place) -> str:
-    return _NAMES[place]
+def name_of(stage_or_lost: StageOrLost) -> str:
+    return _NAMES[stage_or_lost]

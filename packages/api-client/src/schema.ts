@@ -147,6 +147,11 @@ export interface components {
              */
             id: string;
             leads_file: components["schemas"]["FileProfile"] | null;
+            /**
+             * Mapping Confirmed At
+             * @description When the mapping was confirmed; from then on the files cannot be replaced
+             */
+            mapping_confirmed_at: string | null;
             /** Name */
             name: string;
             /**
@@ -218,11 +223,11 @@ export interface components {
              */
             status: "ok";
         };
-        /** LadderPlace */
-        LadderPlace: {
-            /** Name */
-            name: string;
-            place: components["schemas"]["Place"];
+        /** InputKindChoice */
+        InputKindChoice: {
+            kind: components["schemas"]["ColumnKind"];
+            /** Label */
+            label: string;
         };
         /**
          * LeadsColumns
@@ -260,10 +265,17 @@ export interface components {
             submitted_at?: string | null;
         };
         /**
-         * Lost
+         * LeadsRole
+         * @description What a leads-file column can hold besides an input; each is a field of LeadsColumns.
          * @enum {string}
          */
-        Lost: "lost";
+        LeadsRole: "lead_id" | "submitted_at" | "name" | "email" | "phone";
+        /** LeadsRoleChoice */
+        LeadsRoleChoice: {
+            /** Label */
+            label: string;
+            role: components["schemas"]["LeadsRole"];
+        };
         /** Mapping */
         Mapping: {
             /**
@@ -271,7 +283,7 @@ export interface components {
              * @description Where each CRM stage name sits: a Stage, or Lost
              */
             crm_stages?: {
-                [key: string]: components["schemas"]["Place"];
+                [key: string]: components["schemas"]["StageOrLost"];
             };
             /**
              * @default {
@@ -296,17 +308,32 @@ export interface components {
              * @description Every CRM stage name in the column marked as the CRM stage, most used first
              */
             crm_stages: components["schemas"]["CrmStage"][];
-            mapping: components["schemas"]["Mapping"];
             /**
-             * Places
-             * @description Where a CRM stage can be placed: the Canonical ladder in order, then Lost
+             * Input Kinds
+             * @description How an input column can be read
              */
-            places: components["schemas"]["LadderPlace"][];
+            input_kinds: components["schemas"]["InputKindChoice"][];
+            /**
+             * Leads Roles
+             * @description What a leads-file column can hold
+             */
+            leads_roles: components["schemas"]["LeadsRoleChoice"][];
+            mapping: components["schemas"]["Mapping"];
             /**
              * Problems
              * @description Why it cannot be confirmed yet; empty once it can
              */
             problems: string[];
+            /**
+             * Stage History Roles
+             * @description What a stage-history column can hold
+             */
+            stage_history_roles: components["schemas"]["StageHistoryRoleChoice"][];
+            /**
+             * Stages And Lost
+             * @description What a CRM stage can be placed on: the Canonical ladder in order, then Lost
+             */
+            stages_and_lost: components["schemas"]["StageOrLostChoice"][];
         };
         /** NewAdvertiser */
         NewAdvertiser: {
@@ -314,7 +341,6 @@ export interface components {
             /** Name */
             name: string;
         };
-        Place: components["schemas"]["Stage"] | components["schemas"]["Lost"];
         /** Problem */
         Problem: {
             /** Detail */
@@ -339,6 +365,25 @@ export interface components {
             deal_value?: string | null;
             /** Lead Id */
             lead_id?: string | null;
+        };
+        /**
+         * StageHistoryRole
+         * @description What a stage-history column can hold; each is a field of StageHistoryColumns.
+         * @enum {string}
+         */
+        StageHistoryRole: "lead_id" | "crm_stage" | "changed_at" | "deal_value";
+        /** StageHistoryRoleChoice */
+        StageHistoryRoleChoice: {
+            /** Label */
+            label: string;
+            role: components["schemas"]["StageHistoryRole"];
+        };
+        StageOrLost: components["schemas"]["Stage"] | "lost";
+        /** StageOrLostChoice */
+        StageOrLostChoice: {
+            /** Name */
+            name: string;
+            value: components["schemas"]["StageOrLost"];
         };
         /** ValidationError */
         ValidationError: {

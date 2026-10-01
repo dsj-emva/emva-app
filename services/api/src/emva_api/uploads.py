@@ -62,6 +62,9 @@ class Advertiser(BaseModel):
     leads_file: FileProfile | None
     stage_history_file: FileProfile | None
     review_available: bool = Field(description="True once both files are uploaded")
+    mapping_confirmed_at: datetime | None = Field(
+        description="When the mapping was confirmed; from then on the files cannot be replaced"
+    )
 
 
 async def _csv_body(request: Request) -> bytes:
@@ -132,8 +135,9 @@ def upload_file(
     clock: ClockDep,
 ) -> FileProfile:
     """Upload the file, replacing any earlier upload of the same kind."""
-    advertiser = find_advertiser(session, advertiser_id)
-    if advertiser.mapping is not None and advertiser.mapping.confirmed_at is not None:
+    # Locked, so the mapping cannot be confirmed between this check and the commit.
+    advertiser = find_advertiser(session, advertiser_id, lock=True)
+    if _confirmed_at(advertiser) is not None:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             "The mapping is confirmed, so the files can no longer be replaced.",
@@ -199,7 +203,13 @@ def _describe(advertiser: records.Advertiser) -> Advertiser:
         leads_file=leads_file and _profile(leads_file),
         stage_history_file=stage_history_file and _profile(stage_history_file),
         review_available=leads_file is not None and stage_history_file is not None,
+        mapping_confirmed_at=_confirmed_at(advertiser),
     )
+
+
+def _confirmed_at(advertiser: records.Advertiser) -> datetime | None:
+    confirmed_at = advertiser.mapping and advertiser.mapping.confirmed_at
+    return confirmed_at and confirmed_at.astimezone(UTC)
 
 
 def _profile(file: records.UploadedFile) -> FileProfile:

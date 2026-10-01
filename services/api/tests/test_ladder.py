@@ -1,8 +1,8 @@
-from emva_api.ladder import LADDER, LOST, PLACES, Stage, place_name
+from emva_api.ladder import LADDER, LOST, STAGES_AND_LOST, Stage, name_of
 
 
 def test_the_canonical_ladder_runs_from_submitted_to_won_in_order():
-    assert [place_name(stage) for stage in LADDER] == [
+    assert [name_of(stage) for stage in LADDER] == [
         "Submitted",
         "Contact attempted",
         "Engaged",
@@ -16,11 +16,11 @@ def test_the_canonical_ladder_runs_from_submitted_to_won_in_order():
 
 def test_lost_is_not_a_stage_on_the_ladder():
     assert LOST not in LADDER
-    assert place_name(LOST) == "Lost"
+    assert name_of(LOST) == "Lost"
 
 
 def test_a_crm_stage_can_be_placed_on_any_stage_or_on_lost():
-    assert [place_name(place) for place in PLACES] == [
+    assert [name_of(stage_or_lost) for stage_or_lost in STAGES_AND_LOST] == [
         "Submitted",
         "Contact attempted",
         "Engaged",

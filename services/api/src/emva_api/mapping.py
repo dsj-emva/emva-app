@@ -10,7 +10,7 @@ from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from emva_api.ladder import Place, Stage
+from emva_api.ladder import Stage, StageOrLost
 
 
 class ColumnKind(enum.StrEnum):
@@ -49,7 +49,7 @@ class Mapping(BaseModel):
 
     leads: LeadsColumns = LeadsColumns()
     stage_history: StageHistoryColumns = StageHistoryColumns()
-    crm_stages: dict[str, Place] = Field(
+    crm_stages: dict[str, StageOrLost] = Field(
         default_factory=dict, description="Where each CRM stage name sits: a Stage, or Lost"
     )
     typical_deal_size: float | None = Field(None, allow_inf_nan=False)
@@ -77,46 +77,71 @@ class NotConfirmable(Exception):
         self.problems = problems
 
 
-_LEADS_ROLES = {
-    "lead_id": "the lead identifier",
-    "submitted_at": "the submission time",
-    "name": "the lead's name",
-    "email": "the lead's email",
-    "phone": "the lead's phone",
+class LeadsRole(enum.StrEnum):
+    """What a leads-file column can hold besides an input; each is a field of LeadsColumns."""
+
+    LEAD_ID = "lead_id"
+    SUBMITTED_AT = "submitted_at"
+    NAME = "name"
+    EMAIL = "email"
+    PHONE = "phone"
+
+
+class StageHistoryRole(enum.StrEnum):
+    """What a stage-history column can hold; each is a field of StageHistoryColumns."""
+
+    LEAD_ID = "lead_id"
+    CRM_STAGE = "crm_stage"
+    CHANGED_AT = "changed_at"
+    DEAL_VALUE = "deal_value"
+
+
+@dataclass(frozen=True)
+class Role:
+    label: str  # as the screen names it
+    holds: str  # as a sentence names it
+    required: bool = False
+
+
+LEADS_ROLES: dict[LeadsRole, Role] = {
+    LeadsRole.LEAD_ID: Role("Lead identifier", "the lead identifier", required=True),
+    LeadsRole.SUBMITTED_AT: Role("Submission time", "the submission time", required=True),
+    LeadsRole.NAME: Role("Name (removed)", "the lead's name"),
+    LeadsRole.EMAIL: Role("Email (scrambled)", "the lead's email"),
+    LeadsRole.PHONE: Role("Phone (scrambled)", "the lead's phone"),
 }
-_REQUIRED_LEADS_ROLES = ("lead_id", "submitted_at")
-_PERSONAL_DATA_ROLES = ("name", "email", "phone")
-_STAGE_HISTORY_ROLES = {
-    "lead_id": "the lead identifier",
-    "crm_stage": "the CRM stage",
-    "changed_at": "when the change happened",
-    "deal_value": "the deal value",
+STAGE_HISTORY_ROLES: dict[StageHistoryRole, Role] = {
+    StageHistoryRole.LEAD_ID: Role("Lead identifier", "the lead identifier", required=True),
+    StageHistoryRole.CRM_STAGE: Role("CRM stage", "the CRM stage", required=True),
+    StageHistoryRole.CHANGED_AT: Role(
+        "When the change happened", "when the change happened", required=True
+    ),
+    StageHistoryRole.DEAL_VALUE: Role("Deal value", "the deal value"),
 }
+INPUT_KINDS: dict[ColumnKind, str] = {ColumnKind.NUMBER: "Number", ColumnKind.CATEGORY: "Category"}
+_AN_INPUT = "an input to the score"
 
 
 def problems(mapping: Mapping, files: Files) -> list[str]:
     """Every reason the mapping cannot be confirmed yet, in the order the screen shows them."""
     leads, history = mapping.leads, mapping.stage_history
-    found: list[str] = []
+    leads_marks = [(getattr(leads, role), LEADS_ROLES[role]) for role in LeadsRole]
+    history_marks = [
+        (getattr(history, role), STAGE_HISTORY_ROLES[role]) for role in StageHistoryRole
+    ]
+    leads_holds = [(column, role.holds) for column, role in leads_marks] + [
+        (column, _AN_INPUT) for column in leads.inputs
+    ]
+    history_holds = [(column, role.holds) for column, role in history_marks]
 
-    for role in _REQUIRED_LEADS_ROLES:
-        if getattr(leads, role) is None:
-            found.append(f"Mark the leads file's column holding {_LEADS_ROLES[role]}.")
-    marked_leads = [getattr(leads, role) for role in _LEADS_ROLES] + list(leads.inputs)
-    found += _not_in_file("leads file", marked_leads, files.leads_columns)
-
-    for role, holds in _STAGE_HISTORY_ROLES.items():
-        if getattr(history, role) is None:
-            found.append(f"Mark the stage-history file's column holding {holds}.")
-    marked_history = [getattr(history, role) for role in _STAGE_HISTORY_ROLES]
-    found += _not_in_file("stage-history file", marked_history, files.stage_history_columns)
-
-    for role in _PERSONAL_DATA_ROLES:
-        column = getattr(leads, role)
-        if column is not None and column in leads.inputs:
-            found.append(
-                f"“{column}” is marked as the lead's {role}, so it cannot be an input to the score."
-            )
+    found = [
+        *_unmarked("leads file", leads_marks),
+        *_not_in_file("leads file", leads_holds, files.leads_columns),
+        *_unmarked("stage-history file", history_marks),
+        *_not_in_file("stage-history file", history_holds, files.stage_history_columns),
+        *_several_roles("leads file", leads_holds),
+        *_several_roles("stage-history file", history_holds),
+    ]
 
     if history.crm_stage in files.stage_history_columns:
         for name in files.crm_stages:
@@ -137,14 +162,39 @@ def confirm(mapping: Mapping, files: Files, at: datetime) -> ConfirmedMapping:
     refusals = problems(mapping, files)
     if refusals:
         raise NotConfirmable(refusals)
-    used = {name: place for name, place in mapping.crm_stages.items() if name in files.crm_stages}
+    used = {name: on for name, on in mapping.crm_stages.items() if name in files.crm_stages}
     confirmed = mapping.model_copy(update={"crm_stages": used})
     return ConfirmedMapping(mapping=confirmed, confirmed_at=at)
 
 
-def _not_in_file(file: str, marked: list[str | None], columns: list[str]) -> list[str]:
+def _unmarked(file: str, marks: list[tuple[str | None, Role]]) -> list[str]:
+    return [
+        f"Mark the {file}'s column holding {role.holds}."
+        for column, role in marks
+        if role.required and column is None
+    ]
+
+
+def _not_in_file(file: str, holds: list[tuple[str | None, str]], columns: list[str]) -> list[str]:
     return [
         f"The {file} has no column “{column}”."
-        for column in marked
+        for column, _ in holds
         if column is not None and column not in columns
     ]
+
+
+def _several_roles(file: str, holds: list[tuple[str | None, str]]) -> list[str]:
+    """One reason for each column marked as holding more than one thing."""
+    roles: dict[str, list[str]] = {}
+    for column, what in holds:
+        if column is not None:
+            roles.setdefault(column, []).append(what)
+    return [
+        f"The {file}'s column “{column}” is marked as {_listed(several)}; mark it as one only."
+        for column, several in roles.items()
+        if len(several) > 1
+    ]
+
+
+def _listed(items: list[str]) -> str:
+    return f"{', '.join(items[:-1])} and {items[-1]}"

@@ -74,5 +74,11 @@ class AdvertiserMapping(Base):
 
     advertiser_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("advertiser.id"), primary_key=True)
     content: Mapped[dict[str, Any]] = mapped_column(JSON)
+    # The CRM stage names last read from the stage-history file, with the file's object key and
+    # the column they were read from, so a save that changes neither does not read it again.
+    crm_stages_read: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     confirmed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    # The shape of both files the mapping was confirmed against (their columns and the CRM stage
+    # names with counts), so a confirmed mapping reads without the raw files.
+    confirmed_against: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     advertiser: Mapped[Advertiser] = relationship(back_populates="mapping")

@@ -78,7 +78,6 @@ def test_a_new_mapping_lists_everything_still_to_do():
         "Mark the stage-history file's column holding the lead identifier.",
         "Mark the stage-history file's column holding the CRM stage.",
         "Mark the stage-history file's column holding when the change happened.",
-        "Mark the stage-history file's column holding the deal value.",
         "Enter the typical deal size.",
     ]
 
@@ -102,11 +101,15 @@ def test_each_required_leads_column_must_be_marked(role, reason):
     [
         ("lead_id", "Mark the stage-history file's column holding the lead identifier."),
         ("changed_at", "Mark the stage-history file's column holding when the change happened."),
-        ("deal_value", "Mark the stage-history file's column holding the deal value."),
     ],
 )
 def test_each_required_stage_history_column_must_be_marked(role, reason):
     assert problems(with_stage_history(**{role: None}), FILES) == [reason]
+
+
+def test_a_stage_history_file_without_deal_values_may_leave_that_column_unmarked():
+    # Some CRMs do not export it; the typical deal size sizes leads in the meantime.
+    assert problems(with_stage_history(deal_value=None), FILES) == []
 
 
 def test_without_the_crm_stage_column_there_are_no_crm_stages_to_place_yet():
@@ -137,7 +140,7 @@ def test_a_marked_column_must_be_in_the_file():
     ]
 
 
-# Inputs to the score and personal data
+# One column, one role
 
 
 @pytest.mark.parametrize(
@@ -147,8 +150,41 @@ def test_an_input_column_cannot_also_be_personal_data(column, role):
     inputs = {**COMPLETE.leads.inputs, column: ColumnKind.CATEGORY}
 
     assert problems(with_leads(inputs=inputs), FILES) == [
-        f"“{column}” is marked as the lead's {role}, so it cannot be an input to the score."
+        f"The leads file's column “{column}” is marked as the lead's {role} "
+        "and an input to the score; mark it as one only."
     ]
+
+
+@pytest.mark.parametrize("role", ["name", "email", "phone"])
+def test_personal_data_cannot_be_the_lead_identifier(role):
+    assert problems(with_leads(lead_id="Lead ID", **{role: "Lead ID"}), FILES) == [
+        f"The leads file's column “Lead ID” is marked as the lead identifier "
+        f"and the lead's {role}; mark it as one only."
+    ]
+
+
+def test_a_column_marked_for_three_roles_is_named_once_with_all_three():
+    mapping = with_leads(submitted_at="Email", email="Email", inputs={"Email": ColumnKind.CATEGORY})
+
+    assert problems(mapping, FILES) == [
+        "The leads file's column “Email” is marked as the submission time, the lead's email "
+        "and an input to the score; mark it as one only."
+    ]
+
+
+def test_a_stage_history_column_holds_one_role_too():
+    mapping = with_stage_history(changed_at="Stage")
+
+    assert problems(mapping, FILES) == [
+        "The stage-history file's column “Stage” is marked as the CRM stage "
+        "and when the change happened; mark it as one only."
+    ]
+
+
+def test_the_same_column_name_may_be_used_once_in_each_file():
+    # Both files name their lead identifier "Lead ID"; that is one role per file.
+    assert COMPLETE.leads.lead_id == COMPLETE.stage_history.lead_id
+    assert problems(COMPLETE, FILES) == []
 
 
 def test_a_mapping_may_have_no_input_columns():

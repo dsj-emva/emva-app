@@ -1,10 +1,16 @@
-"""The review screen's API: the draft Mapping is kept as the person works, then confirmed."""
+"""The Mapping API: the draft Mapping is kept as the person works, then confirmed."""
 
+import threading
+import time
 from datetime import UTC, datetime
 
+import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
 
 from emva_api.clock import FixedClock
+from emva_api.object_store import ObjectStore
+from emva_api.settings import Settings
 
 LEADS = b"Lead ID,Created,Email,Budget\nL1,2026-01-02,ada@example.com,8000\nL2,2026-01-03,,\n"
 STAGE_HISTORY = (
@@ -31,14 +37,14 @@ COMPLETE = {
     "typical_deal_size": 8000.0,
 }
 
-PLACES = [
-    {"place": "submitted", "name": "Submitted"},
-    {"place": "contact_attempted", "name": "Contact attempted"},
-    {"place": "engaged", "name": "Engaged"},
-    {"place": "qualified", "name": "Qualified"},
-    {"place": "proposal", "name": "Proposal"},
-    {"place": "won", "name": "Won"},
-    {"place": "lost", "name": "Lost"},
+STAGES_AND_LOST = [
+    {"value": "submitted", "name": "Submitted"},
+    {"value": "contact_attempted", "name": "Contact attempted"},
+    {"value": "engaged", "name": "Engaged"},
+    {"value": "qualified", "name": "Qualified"},
+    {"value": "proposal", "name": "Proposal"},
+    {"value": "won", "name": "Won"},
+    {"value": "lost", "name": "Lost"},
 ]
 
 
@@ -92,7 +98,31 @@ def test_a_new_mapping_is_an_empty_draft_with_everything_still_to_do(client: Tes
     }
     assert review["confirmed_at"] is None
     assert review["crm_stages"] == []
-    assert review["places"] == PLACES
+    assert review["stages_and_lost"] == STAGES_AND_LOST
+
+
+def test_the_draft_comes_with_what_each_column_can_hold(client: TestClient):
+    advertiser = advertiser_with_both_files(client)
+
+    review = client.get(f"/advertisers/{advertiser}/mapping").json()
+
+    assert review["leads_roles"] == [
+        {"role": "lead_id", "label": "Lead identifier"},
+        {"role": "submitted_at", "label": "Submission time"},
+        {"role": "name", "label": "Name (removed)"},
+        {"role": "email", "label": "Email (scrambled)"},
+        {"role": "phone", "label": "Phone (scrambled)"},
+    ]
+    assert review["stage_history_roles"] == [
+        {"role": "lead_id", "label": "Lead identifier"},
+        {"role": "crm_stage", "label": "CRM stage"},
+        {"role": "changed_at", "label": "When the change happened"},
+        {"role": "deal_value", "label": "Deal value"},
+    ]
+    assert review["input_kinds"] == [
+        {"kind": "number", "label": "Number"},
+        {"kind": "category", "label": "Category"},
+    ]
     assert "Enter the typical deal size." in review["problems"]
 
 
@@ -155,7 +185,8 @@ def test_the_reasons_it_cannot_be_confirmed_come_with_the_draft(client: TestClie
     review = save(client, advertiser, draft).json()
 
     assert review["problems"] == [
-        "“Email” is marked as the lead's email, so it cannot be an input to the score.",
+        "The leads file's column “Email” is marked as the lead's email "
+        "and an input to the score; mark it as one only.",
         "Place the CRM stage “Closed won” on the canonical ladder or on Lost.",
         "Place at least one CRM stage on Won.",
         "The typical deal size must be more than zero.",
@@ -228,6 +259,7 @@ def test_a_confirmed_mapping_cannot_be_changed(client: TestClient):
 def test_a_confirmed_mapping_is_not_confirmed_again(client: TestClient, clock: FixedClock):
     advertiser = advertiser_with_both_files(client)
     save(client, advertiser, COMPLETE)
+    clock.set(datetime(2026, 9, 14, 10, 0, tzinfo=UTC))
     client.post(f"/advertisers/{advertiser}/mapping/confirmation")
     clock.set(datetime(2026, 9, 21, 9, 0, tzinfo=UTC))
 
@@ -267,15 +299,111 @@ def test_a_stored_stage_history_file_that_can_no_longer_be_read_is_reported(
     client: TestClient, bucket
 ):
     advertiser = advertiser_with_both_files(client)
-    save(client, advertiser, COMPLETE)
     stored = [
         item for item in bucket.objects.filter(Prefix=f"advertisers/{advertiser}/stage-history/")
     ]
     bucket.put_object(Key=stored[0].key, Body=b"")
 
-    response = client.get(f"/advertisers/{advertiser}/mapping")
+    response = save(client, advertiser, COMPLETE)
 
     assert response.status_code == 409
     assert response.json() == {
         "detail": "The stored stage-history file can no longer be read. Upload it again."
     }
+
+
+def test_a_confirmed_mapping_reads_without_the_raw_files(client: TestClient, bucket):
+    advertiser = advertiser_with_both_files(client)
+    save(client, advertiser, COMPLETE)
+    confirmed = client.post(f"/advertisers/{advertiser}/mapping/confirmation").json()
+
+    bucket.objects.filter(Prefix=f"advertisers/{advertiser}/").delete()
+    response = client.get(f"/advertisers/{advertiser}/mapping")
+
+    assert response.status_code == 200, response.text
+    assert response.json() == confirmed
+    assert response.json()["crm_stages"] == [
+        {"name": "New enquiry", "row_count": 2},
+        {"name": "Closed won", "row_count": 1},
+    ]
+
+
+def test_the_advertiser_says_when_its_mapping_was_confirmed(client: TestClient, clock: FixedClock):
+    advertiser = advertiser_with_both_files(client)
+    save(client, advertiser, COMPLETE)
+    assert client.get(f"/advertisers/{advertiser}").json()["mapping_confirmed_at"] is None
+    clock.set(datetime(2026, 9, 20, 16, 30, tzinfo=UTC))
+
+    client.post(f"/advertisers/{advertiser}/mapping/confirmation")
+
+    assert client.get(f"/advertisers/{advertiser}").json()["mapping_confirmed_at"] == (
+        "2026-09-20T16:30:00Z"
+    )
+
+
+def test_saving_again_with_the_same_crm_stage_column_does_not_read_the_file_again(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    advertiser = advertiser_with_both_files(client)
+    save(client, advertiser, COMPLETE)
+    reads: list[str] = []
+    get = ObjectStore.get
+    monkeypatch.setattr(ObjectStore, "get", lambda store, key: reads.append(key) or get(store, key))
+
+    review = save(client, advertiser, {**COMPLETE, "typical_deal_size": 9000}).json()
+    client.get(f"/advertisers/{advertiser}/mapping")
+
+    assert reads == []
+    assert [stage["name"] for stage in review["crm_stages"]] == ["New enquiry", "Closed won"]
+
+
+def test_a_new_crm_stage_column_or_a_new_file_is_read_once(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    advertiser = advertiser_with_both_files(client)
+    save(client, advertiser, COMPLETE)
+    reads: list[str] = []
+    get = ObjectStore.get
+    monkeypatch.setattr(ObjectStore, "get", lambda store, key: reads.append(key) or get(store, key))
+
+    other_column = {
+        **COMPLETE,
+        "stage_history": {**COMPLETE["stage_history"], "crm_stage": "Deal Value"},
+    }
+    assert save(client, advertiser, other_column).json()["crm_stages"] == [
+        {"name": "9000", "row_count": 1}
+    ]
+    upload(client, advertiser, "stage-history", STAGE_HISTORY)
+    client.post(f"/advertisers/{advertiser}/mapping/confirmation")
+
+    assert len(reads) == 2
+
+
+def test_an_upload_waits_while_the_mapping_is_being_confirmed(
+    client: TestClient, settings: Settings
+):
+    # Confirmation holds the advertiser's row; an upload arriving meanwhile waits for it, then
+    # finds the mapping confirmed, so no file can change between confirmation's check and commit.
+    advertiser = advertiser_with_both_files(client)
+    save(client, advertiser, COMPLETE)
+    responses = []
+    engine = create_engine(settings.database_url)
+    with engine.connect() as confirming:
+        confirming.execute(
+            text("SELECT id FROM advertiser WHERE id = :id FOR UPDATE"), {"id": advertiser}
+        )
+        uploading = threading.Thread(
+            target=lambda: responses.append(upload(client, advertiser, "leads", b"Lead ID\nL9\n"))
+        )
+        uploading.start()
+        time.sleep(0.5)
+        assert uploading.is_alive()
+        confirming.execute(
+            text("UPDATE mapping SET confirmed_at = now() WHERE advertiser_id = :id"),
+            {"id": advertiser},
+        )
+        confirming.commit()
+    uploading.join(timeout=10)
+    engine.dispose()
+
+    assert responses[0].status_code == 409

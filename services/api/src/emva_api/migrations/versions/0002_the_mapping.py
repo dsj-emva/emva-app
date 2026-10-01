@@ -20,7 +20,9 @@ def upgrade() -> None:
         "mapping",
         sa.Column("advertiser_id", sa.Uuid(), nullable=False),
         sa.Column("content", sa.JSON(), nullable=False),
+        sa.Column("crm_stages_read", sa.JSON(), nullable=True),
         sa.Column("confirmed_at", sa.DateTime(timezone=True), nullable=True),
+        sa.Column("confirmed_against", sa.JSON(), nullable=True),
         sa.ForeignKeyConstraint(["advertiser_id"], ["advertiser.id"]),
         sa.PrimaryKeyConstraint("advertiser_id"),
     )

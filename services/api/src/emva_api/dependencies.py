@@ -42,8 +42,12 @@ UNREADABLE_STORED_FILE = {
 }
 
 
-def find_advertiser(session: Session, advertiser_id: uuid.UUID) -> records.Advertiser:
-    advertiser = session.get(records.Advertiser, advertiser_id)
+def find_advertiser(
+    session: Session, advertiser_id: uuid.UUID, *, lock: bool = False
+) -> records.Advertiser:
+    """The advertiser; with lock, its row is held until the transaction ends, so changes that
+    must not interleave (uploading a file, confirming the mapping) take turns."""
+    advertiser = session.get(records.Advertiser, advertiser_id, with_for_update=lock)
     if advertiser is None:
         raise HTTPException(status.HTTP_404_NOT_FOUND, "No such advertiser.")
     return advertiser
