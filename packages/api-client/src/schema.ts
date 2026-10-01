@@ -123,6 +123,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/advertisers/{advertiser_id}/scores": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Score Lead
+         * @description The entered lead's Submit score and Score explanation, from the latest Training run.
+         */
+        post: operations["scoreLead"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/advertisers/{advertiser_id}/scoring-form": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Scoring Form
+         * @description The inputs a person enters to score one new lead.
+         */
+        get: operations["getScoringForm"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/advertisers/{advertiser_id}/training": {
         parameters: {
             query?: never;
@@ -207,6 +247,16 @@ export interface components {
             review_available: boolean;
             stage_history_file: components["schemas"]["FileProfile"] | null;
         };
+        /** Choice */
+        Choice: {
+            /** Label */
+            label: string;
+            /**
+             * Value
+             * @description What to send; empty for a category not given
+             */
+            value: string;
+        };
         /** Column */
         Column: {
             /**
@@ -246,6 +296,29 @@ export interface components {
             /** Label */
             label: string;
             value: components["schemas"]["DateOrder"];
+        };
+        /** EnteredLead */
+        EnteredLead: {
+            /**
+             * Inputs
+             * @description Every input by its column, as a file would write it; a number may be empty
+             */
+            inputs: {
+                [key: string]: string;
+            };
+        };
+        /** Explanation */
+        Explanation: {
+            /**
+             * Steps
+             * @description One per input, in the Mapping's order
+             */
+            steps: components["schemas"]["Step"][];
+            /**
+             * Typical Chance
+             * @description The typical lead's chance of winning
+             */
+            typical_chance: number;
         };
         /**
          * FileKind
@@ -443,6 +516,56 @@ export interface components {
             /** Detail */
             detail: string;
         };
+        /** ScoredLead */
+        ScoredLead: {
+            /** Chance Of Winning */
+            chance_of_winning: number;
+            /** @description Where the data the model learned from came from */
+            data_source: components["schemas"]["DataSource"];
+            explanation: components["schemas"]["Explanation"];
+            /**
+             * Lead Score
+             * @description The chance of winning times the deal size; not money
+             */
+            lead_score: number;
+            /**
+             * Typical Deal Size
+             * @description The size the Lead score used
+             */
+            typical_deal_size: number;
+        };
+        /** ScoringForm */
+        ScoringForm: {
+            /**
+             * Inputs
+             * @description The Mapping's inputs, in its order
+             */
+            inputs: components["schemas"]["ScoringInput"][];
+        };
+        /** ScoringInput */
+        ScoringInput: {
+            /**
+             * Choices
+             * @description A category's values seen in training, most common first; null for a number
+             */
+            choices: components["schemas"]["Choice"][] | null;
+            /**
+             * Column
+             * @description The input's name, as the Mapping has it
+             */
+            column: string;
+            kind: components["schemas"]["ColumnKind"];
+            /**
+             * Typical
+             * @description The typical lead's value: the training mean or most common
+             */
+            typical: string;
+            /**
+             * Typical Choice
+             * @description The value of the typical lead's choice, for a category; null for a number
+             */
+            typical_choice: string | null;
+        };
         /**
          * Stage
          * @description A Stage of the Canonical ladder; members are in ladder order.
@@ -481,6 +604,39 @@ export interface components {
             /** Name */
             name: string;
             value: components["schemas"]["StageOrLost"];
+        };
+        /** Step */
+        Step: {
+            /**
+             * After
+             * @description The chance of winning once it changed to this lead's
+             */
+            after: number;
+            /**
+             * Before
+             * @description The chance of winning before this input changed
+             */
+            before: number;
+            /**
+             * Change
+             * @description How far this input moved the chance: up when above zero
+             */
+            readonly change: number;
+            /**
+             * Input
+             * @description The input's name, as the Mapping has it
+             */
+            input: string;
+            /**
+             * Typical
+             * @description The typical lead's value
+             */
+            typical: string;
+            /**
+             * Value
+             * @description This lead's value; “not given” when it was left blank
+             */
+            value: string;
         };
         /**
          * Summary
@@ -993,6 +1149,135 @@ export interface operations {
                 };
             };
             /** @description Not confirmed, or confirmed but the raw files not all deleted yet */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    scoreLead: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                advertiser_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnteredLead"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScoredLead"];
+                };
+            };
+            /** @description The lead cannot be scored: an input missing, unreadable or unseen in training */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description No Training run yet, or none from which a chance can be known */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getScoringForm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                advertiser_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScoringForm"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description No Training run yet, or none from which a chance can be known */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;

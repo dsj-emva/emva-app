@@ -1,6 +1,7 @@
 import type { ApiClient, components } from '@emva/api-client'
 import { useEffect, useId, useState } from 'react'
 
+import { Scoring } from './Scoring.tsx'
 import { refusal, UNREACHABLE } from './service-errors.ts'
 
 type TrainingState = components['schemas']['Training']
@@ -103,7 +104,14 @@ export function Training({
             </p>
           )}
           {loaded.training.latest && (
-            <Transitions transitions={loaded.training.latest.transitions} />
+            <>
+              <Transitions transitions={loaded.training.latest.transitions} />
+              <Scoring
+                key={loaded.training.latest.id}
+                client={client}
+                advertiserId={advertiserId}
+              />
+            </>
           )}
         </>
       )}

@@ -14,7 +14,6 @@ from datetime import UTC, datetime
 from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
-from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
@@ -29,12 +28,11 @@ from emva_api.dependencies import (
 )
 from emva_api.mapping import Mapping
 from emva_api.model import RULE, Model, train
-from emva_api.object_store import MissingObject, ObjectStore
+from emva_api.object_store import ObjectStore
+from emva_api.training_runs import STORAGE_FAILED, latest_run
 from emva_api.transitions import Transition
 
 router = APIRouter()
-
-STORAGE_FAILED = {status.HTTP_503_SERVICE_UNAVAILABLE: {"model": Problem}}
 
 
 class TransitionResult(BaseModel):
@@ -150,22 +148,8 @@ def _training(advertiser: records.Advertiser, latest: TrainingRunView | None) ->
 def _latest(
     session: Session, advertiser: records.Advertiser, store: ObjectStore
 ) -> TrainingRunView | None:
-    run = session.scalars(
-        select(records.TrainingRun)
-        .where(records.TrainingRun.advertiser_id == advertiser.id)
-        .order_by(records.TrainingRun.number.desc())
-        .limit(1)
-    ).first()
-    if run is None:
-        return None
-    try:
-        stored = store.get(run.model_key)
-    except (BotoCoreError, ClientError, MissingObject) as error:
-        raise HTTPException(
-            status.HTTP_503_SERVICE_UNAVAILABLE,
-            "The latest Training run's model could not be read from storage. Try again.",
-        ) from error
-    return _view(run, Model.model_validate_json(stored))
+    latest = latest_run(session, advertiser, store)
+    return None if latest is None else _view(*latest)
 
 
 def _view(run: records.TrainingRun, model: Model) -> TrainingRunView:

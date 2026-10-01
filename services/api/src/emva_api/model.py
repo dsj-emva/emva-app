@@ -29,6 +29,12 @@ from emva_api.features import Features, Refused, fit_features
 from emva_api.formatter import FormattedLead
 from emva_api.transitions import Faced, Transition, transitions_dataset
 
+
+class NoChance(Refused):
+    """No chance can be known from the Training run, whatever the lead: no lead has made or
+    failed any Transition."""
+
+
 MIN_EACH = 10
 # The L2 penalty's inverse strength, fixed in advance and never tuned on results: scikit-learn's
 # default, a moderate pull towards zero on standardised inputs.
@@ -86,7 +92,7 @@ class TransitionModel(BaseModel):
             )
             return 1 / (1 + math.exp(-score))
         if self.smoothed_rate is None:
-            raise Refused("No lead has made or failed any Transition yet, so no chance is known.")
+            raise NoChance("No lead has made or failed any Transition yet, so no chance is known.")
         return self.smoothed_rate
 
 
