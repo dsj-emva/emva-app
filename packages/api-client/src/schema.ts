@@ -123,6 +123,43 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/advertisers/{advertiser_id}/training-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Train Model
+         * @description Train on every formatted lead and stage event as of now, and keep the Training run.
+         */
+        post: operations["train"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/advertisers/{advertiser_id}/training-runs/latest": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Latest Training Run */
+        get: operations["getLatestTrainingRun"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -470,6 +507,56 @@ export interface components {
             unreadable: components["schemas"]["UnreadableRows"][];
             /** Won */
             won: number;
+        };
+        /** TrainingRunView */
+        TrainingRunView: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Trained At
+             * Format: date-time
+             */
+            trained_at: string;
+            /**
+             * Transitions
+             * @description Each Transition from Contact attempted to Won, in ladder order
+             */
+            transitions: components["schemas"]["TransitionResult"][];
+        };
+        /** TransitionResult */
+        TransitionResult: {
+            /**
+             * Failed
+             * @description Leads lost at it
+             */
+            failed: number;
+            from_stage: components["schemas"]["Stage"];
+            /**
+             * Learned
+             * @description False when too few to learn: fewer than 10 made or failed
+             */
+            learned: boolean;
+            /**
+             * Made
+             * @description Leads that made it
+             */
+            made: number;
+            /** Name */
+            name: string;
+            /**
+             * Observed Rate
+             * @description made / (made + failed), the chance used when too few to learn; null when no lead has made or failed it yet
+             */
+            observed_rate: number | null;
+            to_stage: components["schemas"]["Stage"];
+            /**
+             * Unfinished
+             * @description Leads that faced it but neither made nor failed it yet; left out
+             */
+            unfinished: number;
         };
         /**
          * UnreadableRows
@@ -880,6 +967,104 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    train: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                advertiser_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrainingRunView"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The mapping is not confirmed, its data not formatted, or it marks no input */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The Training run could not be kept */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getLatestTrainingRun: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                advertiser_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TrainingRunView"];
+                };
+            };
+            /** @description No such advertiser, or not trained yet */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

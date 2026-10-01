@@ -757,6 +757,93 @@
         "title": "Summary",
         "type": "object"
       },
+      "TrainingRunView": {
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "trained_at": {
+            "format": "date-time",
+            "title": "Trained At",
+            "type": "string"
+          },
+          "transitions": {
+            "description": "Each Transition from Contact attempted to Won, in ladder order",
+            "items": {
+              "$ref": "#/components/schemas/TransitionResult"
+            },
+            "title": "Transitions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "trained_at",
+          "transitions"
+        ],
+        "title": "TrainingRunView",
+        "type": "object"
+      },
+      "TransitionResult": {
+        "properties": {
+          "failed": {
+            "description": "Leads lost at it",
+            "title": "Failed",
+            "type": "integer"
+          },
+          "from_stage": {
+            "$ref": "#/components/schemas/Stage"
+          },
+          "learned": {
+            "description": "False when too few to learn: fewer than 10 made or failed",
+            "title": "Learned",
+            "type": "boolean"
+          },
+          "made": {
+            "description": "Leads that made it",
+            "title": "Made",
+            "type": "integer"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "observed_rate": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "made / (made + failed), the chance used when too few to learn; null when no lead has made or failed it yet",
+            "title": "Observed Rate"
+          },
+          "to_stage": {
+            "$ref": "#/components/schemas/Stage"
+          },
+          "unfinished": {
+            "description": "Leads that faced it but neither made nor failed it yet; left out",
+            "title": "Unfinished",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "from_stage",
+          "to_stage",
+          "name",
+          "made",
+          "failed",
+          "unfinished",
+          "learned",
+          "observed_rate"
+        ],
+        "title": "TransitionResult",
+        "type": "object"
+      },
       "UnreadableRows": {
         "description": "The rows of one file that could not be read for one reason, and so were not kept.",
         "properties": {
@@ -1328,6 +1415,127 @@
           }
         },
         "summary": "Confirm Mapping"
+      }
+    },
+    "/advertisers/{advertiser_id}/training-runs": {
+      "post": {
+        "description": "Train on every formatted lead and stage event as of now, and keep the Training run.",
+        "operationId": "train",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "advertiser_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Advertiser Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrainingRunView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The mapping is not confirmed, its data not formatted, or it marks no input"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "The Training run could not be kept"
+          }
+        },
+        "summary": "Train Model"
+      }
+    },
+    "/advertisers/{advertiser_id}/training-runs/latest": {
+      "get": {
+        "operationId": "getLatestTrainingRun",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "advertiser_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Advertiser Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TrainingRunView"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "No such advertiser, or not trained yet"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Latest Training Run"
       }
     },
     "/health": {

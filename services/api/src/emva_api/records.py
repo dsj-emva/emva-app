@@ -15,13 +15,21 @@ from sqlalchemy import (
     String,
     UniqueConstraint,
     insert,
+    select,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship
+from sqlalchemy.orm import (
+    DeclarativeBase,
+    Mapped,
+    Session,
+    mapped_column,
+    relationship,
+    selectinload,
+)
 
-from emva_api.ladder import STAGES_AND_LOST
+from emva_api.ladder import LOST, STAGES_AND_LOST, Stage, StageEvent
 
 if TYPE_CHECKING:
-    from emva_api.formatter import Formatted
+    from emva_api.formatter import Formatted, FormattedLead
 
 
 class Base(DeclarativeBase):
@@ -151,6 +159,19 @@ class Formatting(Base):
     summary: Mapped[dict[str, Any]] = mapped_column(JSON)
 
 
+class TrainingRun(Base):
+    """One fit of the models on the advertiser's formatted data; the model itself (its
+    parameters, as JSON) lives in object storage under model_key."""
+
+    __tablename__ = "training_run"
+    __table_args__ = (Index("training_run_advertiser_id", "advertiser_id", "trained_at"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    advertiser_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("advertiser.id"))
+    trained_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    model_key: Mapped[str] = mapped_column(String(255))
+
+
 def keep_formatted(
     session: Session, advertiser: Advertiser, formatted: "Formatted", at: datetime
 ) -> None:
@@ -189,3 +210,34 @@ def keep_formatted(
     advertiser.formatting = Formatting(
         formatted_at=at, summary=formatted.summary.model_dump(mode="json")
     )
+
+
+def formatted_leads(session: Session, advertiser: Advertiser) -> list["FormattedLead"]:
+    """The advertiser's formatted leads with their stage events, as the Formatter made them, in
+    order of submission."""
+    from emva_api.formatter import FormattedLead
+
+    leads = session.scalars(
+        select(Lead)
+        .where(Lead.advertiser_id == advertiser.id)
+        .options(selectinload(Lead.stage_events))
+        .order_by(Lead.submitted_at, Lead.identifier_hash)
+    )
+    return [
+        FormattedLead(
+            identifier_hash=lead.identifier_hash,
+            submitted_at=lead.submitted_at,
+            email_hash=lead.email_hash,
+            phone_hash=lead.phone_hash,
+            phone_country_found=lead.phone_country_found,
+            numbers=lead.number_inputs,
+            categories=lead.category_inputs,
+            stage_events=tuple(
+                StageEvent(
+                    LOST if event.stage == LOST else Stage(event.stage), event.at, event.deal_value
+                )
+                for event in lead.stage_events
+            ),
+        )
+        for lead in leads
+    ]
