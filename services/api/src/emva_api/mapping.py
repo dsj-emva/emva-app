@@ -5,12 +5,15 @@ A Mapping is a draft until a person confirms it. Pure: no I/O; the time of confi
 """
 
 import enum
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from emva_api.csv_file import ColumnFacts
+from emva_api.dates import DateOrder, is_time_zone
 from emva_api.ladder import Stage, StageOrLost
+from emva_api.personal_data import Country
 
 
 class ColumnKind(enum.StrEnum):
@@ -53,6 +56,11 @@ class Mapping(BaseModel):
         default_factory=dict, description="Where each CRM stage name sits: a Stage, or Lost"
     )
     typical_deal_size: float | None = Field(None, allow_inf_nan=False)
+    default_country: Country | None = Field(
+        None, description="Where a phone written without an international prefix is from"
+    )
+    date_order: DateOrder | None = Field(None, description="The order both files write dates in")
+    time_zone: str = Field("UTC", description="The zone of every time written without one")
 
 
 @dataclass(frozen=True)
@@ -63,6 +71,14 @@ class Files:
     stage_history_columns: list[str]
     # Every CRM stage name in the column marked as the CRM stage.
     crm_stages: list[str]
+    leads_row_count: int = 0
+    # What each leads-file column's values are like; a column without facts is not checked.
+    leads_column_facts: dict[str, ColumnFacts] = field(default_factory=dict)
+
+
+def most_categories(row_count: int) -> int:
+    """The most distinct values a category input may have: more and it is not a category."""
+    return max(20, row_count // 4)
 
 
 @dataclass(frozen=True)
@@ -150,6 +166,17 @@ def problems(mapping: Mapping, files: Files) -> list[str]:
         if not any(mapping.crm_stages.get(name) is Stage.WON for name in files.crm_stages):
             found.append("Place at least one CRM stage on Won.")
 
+    found += _category_problems(leads.inputs, files)
+
+    if mapping.date_order is None:
+        found.append("Pick the order the files write dates in.")
+    if not is_time_zone(mapping.time_zone):
+        found.append(
+            f"“{mapping.time_zone}” is not a time zone; use a name such as Europe/London or UTC."
+        )
+    if leads.phone is not None and mapping.default_country is None:
+        found.append("Pick the country a phone written without an international prefix is from.")
+
     if mapping.typical_deal_size is None:
         found.append("Enter the typical deal size.")
     elif mapping.typical_deal_size <= 0:
@@ -165,6 +192,27 @@ def confirm(mapping: Mapping, files: Files, at: datetime) -> ConfirmedMapping:
     used = {name: on for name, on in mapping.crm_stages.items() if name in files.crm_stages}
     confirmed = mapping.model_copy(update={"crm_stages": used})
     return ConfirmedMapping(mapping=confirmed, confirmed_at=at)
+
+
+def _category_problems(inputs: dict[str, ColumnKind], files: Files) -> list[str]:
+    """A category input can carry neither contact details nor free text (decision 0010)."""
+    found = []
+    most = most_categories(files.leads_row_count)
+    for column, kind in inputs.items():
+        facts = files.leads_column_facts.get(column)
+        if kind is not ColumnKind.CATEGORY or facts is None:
+            continue
+        if facts.looks_like_contact:
+            found.append(
+                f"“{column}” cannot be a category input: some of its values look like email "
+                "addresses or phone numbers."
+            )
+        elif facts.distinct_values > most:
+            found.append(
+                f"“{column}” cannot be a category input: it has {facts.distinct_values} "
+                f"different values, more than the {most} a category may have in this file."
+            )
+    return found
 
 
 def _unmarked(file: str, marks: list[tuple[str | None, Role]]) -> list[str]:

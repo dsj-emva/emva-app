@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 
 import pytest
 
+from emva_api.csv_file import ColumnFacts
+from emva_api.dates import DateOrder
 from emva_api.ladder import LOST, Stage
 from emva_api.mapping import (
     ColumnKind,
@@ -19,6 +21,7 @@ from emva_api.mapping import (
     confirm,
     problems,
 )
+from emva_api.personal_data import Country
 
 FILES = Files(
     leads_columns=["Lead ID", "Created", "Full Name", "Email", "Phone", "Trip Type", "Budget"],
@@ -45,6 +48,9 @@ COMPLETE = Mapping(
         "Closed lost": LOST,
     },
     typical_deal_size=8000,
+    default_country=Country.GB,
+    date_order=DateOrder.DAY_MONTH_YEAR,
+    time_zone="Europe/London",
 )
 
 AT = datetime(2026, 9, 14, 10, 0, tzinfo=UTC)
@@ -78,7 +84,76 @@ def test_a_new_mapping_lists_everything_still_to_do():
         "Mark the stage-history file's column holding the lead identifier.",
         "Mark the stage-history file's column holding the CRM stage.",
         "Mark the stage-history file's column holding when the change happened.",
+        "Pick the order the files write dates in.",
         "Enter the typical deal size.",
+    ]
+
+
+# Date order, time zone and default country
+
+
+def test_a_new_mapping_reads_times_without_a_zone_as_utc():
+    assert Mapping().time_zone == "UTC"
+
+
+def test_the_time_zone_must_be_a_real_one():
+    misspelt = COMPLETE.model_copy(update={"time_zone": "Europe/Lndon"})
+
+    assert problems(misspelt, FILES) == [
+        "“Europe/Lndon” is not a time zone; use a name such as Europe/London or UTC."
+    ]
+
+
+def test_with_a_phone_column_marked_the_default_country_must_be_picked():
+    without = COMPLETE.model_copy(update={"default_country": None})
+
+    assert problems(without, FILES) == [
+        "Pick the country a phone written without an international prefix is from."
+    ]
+    unmarked = without.model_copy(
+        update={"leads": without.leads.model_copy(update={"phone": None})}
+    )
+    assert problems(unmarked, FILES) == []
+
+
+# Category inputs carry neither contact details nor free text (decision 0010)
+
+
+def files_with(facts: ColumnFacts, row_count: int = 100) -> Files:
+    return Files(
+        leads_columns=FILES.leads_columns,
+        stage_history_columns=FILES.stage_history_columns,
+        crm_stages=FILES.crm_stages,
+        leads_row_count=row_count,
+        leads_column_facts={"Trip Type": facts, "Budget": facts},
+    )
+
+
+def test_a_category_input_whose_values_look_like_contact_details_is_refused():
+    found = problems(COMPLETE, files_with(ColumnFacts(distinct_values=3, looks_like_contact=True)))
+
+    assert found == [
+        "“Trip Type” cannot be a category input: some of its values look like email addresses "
+        "or phone numbers."
+    ]
+
+
+@pytest.mark.parametrize(("row_count", "distinct"), [(10, 20), (100, 25), (400, 100)])
+def test_a_category_input_may_have_20_values_or_a_quarter_of_the_rows(row_count, distinct):
+    facts = ColumnFacts(distinct_values=distinct, looks_like_contact=False)
+
+    assert problems(COMPLETE, files_with(facts, row_count)) == []
+
+
+@pytest.mark.parametrize(
+    ("row_count", "distinct", "most"), [(10, 21, 20), (100, 26, 25), (400, 101, 100)]
+)
+def test_a_category_input_with_more_values_than_that_is_refused(row_count, distinct, most):
+    facts = ColumnFacts(distinct_values=distinct, looks_like_contact=False)
+
+    assert problems(COMPLETE, files_with(facts, row_count)) == [
+        f"“Trip Type” cannot be a category input: it has {distinct} different values, more "
+        f"than the {most} a category may have in this file."
     ]
 
 

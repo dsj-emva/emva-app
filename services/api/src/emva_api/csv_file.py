@@ -5,8 +5,11 @@ Pure: takes the file's bytes, never a path.
 
 import csv
 import io
+import re
 from collections import Counter
 from dataclasses import dataclass
+
+from pydantic import BaseModel, ConfigDict, Field
 
 EXAMPLES_PER_COLUMN = 3
 
@@ -63,6 +66,40 @@ def profile(table: Table) -> list[ColumnProfile]:
         ColumnProfile(name=name, examples=_first_distinct_values(table, index))
         for index, name in enumerate(table.columns)
     ]
+
+
+class ColumnFacts(BaseModel):
+    """What a column's values are like, without any of them: kept to check the Mapping."""
+
+    model_config = ConfigDict(frozen=True)
+
+    distinct_values: int = Field(description="How many distinct non-empty values it holds")
+    looks_like_contact: bool = Field(description="Whether any value looks like an email or phone")
+
+
+_EMAIL = re.compile(r"[^@\s]+@[^@\s]+\.[A-Za-z]{2,}")
+# A number starting with "+" or "0", as phones are written, of digits in groups.
+_PHONE = re.compile(r"(?<!\w)\(?(?:\+|0)[\d\s().-]*\d(?![\d:])")
+_PHONE_DIGITS = range(9, 16)
+
+
+def column_facts(table: Table) -> dict[str, ColumnFacts]:
+    facts = {}
+    for index, name in enumerate(table.columns):
+        values = {row[index].strip() for row in table.rows} - {""}
+        facts[name] = ColumnFacts(
+            distinct_values=len(values),
+            looks_like_contact=any(_looks_like_contact(value) for value in values),
+        )
+    return facts
+
+
+def _looks_like_contact(value: str) -> bool:
+    if _EMAIL.search(value):
+        return True
+    return any(
+        sum(c.isdigit() for c in found.group()) in _PHONE_DIGITS for found in _PHONE.finditer(value)
+    )
 
 
 def count_values(table: Table, column: str) -> list[tuple[str, int]]:
