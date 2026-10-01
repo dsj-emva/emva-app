@@ -5,6 +5,7 @@ dated, after the fold's start. Only leads with an Outcome known now are compared
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
 
+import pytest
 from test_hand_made_upload import HAND_MADE, HAND_MADE_MAPPING
 
 from emva_api.backtest import FOLDS, backtest, scored_folds
@@ -163,28 +164,32 @@ def test_the_backtest_on_the_hand_made_dataset_reports_its_result_whatever_it_is
     assert backtest(leads, NOW) == result
 
 
-def test_the_hand_made_result_already_seen_stays_exactly_as_it_was():
+def test_the_hand_made_result_already_seen_stays_as_it_was():
     """The hand-made result was seen when this Backtest was first built (PR #21); every later
-    change must leave it bit for bit as it was, or it would be tuning."""
+    change must leave it as it was, or it would be tuning. Bit for bit on one machine; across
+    machines the regressions' floating point may differ in the last place, so to 1e-12."""
     mapping = ConfirmedMapping(Mapping.model_validate(HAND_MADE_MAPPING), DAY_ONE)
     tables = [
         read_csv((HAND_MADE / name).read_bytes()) for name in ("leads.csv", "stage_history.csv")
     ]
     leads = format_files(*tables, mapping).leads
 
+    def seen(value: float):
+        return pytest.approx(value, rel=1e-12, abs=1e-15)
+
     result = backtest(leads, datetime(2026, 9, 14, tzinfo=UTC))
 
-    assert result.slope == 1.218257002071192
+    assert result.slope == seen(1.218257002071192)
     assert result.comparison is not None
-    assert result.comparison.difference == 0.021831717979490708
-    assert result.comparison.interval_low == -0.00959169631846889
-    assert result.comparison.interval_high == 0.05593456387736267
+    assert result.comparison.difference == seen(0.021831717979490708)
+    assert result.comparison.interval_low == seen(-0.00959169631846889)
+    assert result.comparison.interval_high == seen(0.05593456387736267)
     assert result.auc == 0.7175324675324676
     assert [(g.leads, g.predicted, g.actual) for g in result.groups] == [
-        (12, 0.07622443184822557, 0.08333333333333333),
-        (12, 0.26868678502035964, 0.25),
-        (12, 0.29705090434732245, 0.16666666666666666),
-        (11, 0.3487562586805556, 0.18181818181818182),
-        (11, 0.4321467915120867, 0.5454545454545454),
+        (12, seen(0.07622443184822557), 0.08333333333333333),
+        (12, seen(0.26868678502035964), 0.25),
+        (12, seen(0.29705090434732245), 0.16666666666666666),
+        (11, seen(0.3487562586805556), 0.18181818181818182),
+        (11, seen(0.4321467915120867), 0.5454545454545454),
     ]
     assert [c.passed for c in result.checks] == [False, False]
