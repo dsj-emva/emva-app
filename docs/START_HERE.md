@@ -59,12 +59,9 @@ Rules that keep the documents and the code in step:
 ## 2. Decisions still open (ask before building anything that depends on them)
 
 1. Personal traits switch: its default and who may flip it (decision 0008).
-2. A lead that states nothing about deal size: use the advertiser's typical deal size so every lead is on one
-   scale (decision 0003). Confirmed by the user on 2026-10-01: the typical deal size is set by a person, not
-   learned, so the scale stays fixed between retrains.
-3. The exact volume and timing thresholds for moving the platform's learning event to a later stage, per platform,
+2. The exact volume and timing thresholds for moving the platform's learning event to a later stage, per platform,
    checked against current platform guidance (decision 0012). Needed only in phase 6.
-4. Which pilot advertiser, and so which industry first (planned hospitality proposed, then real estate).
+3. Which pilot advertiser, and so which industry first (planned hospitality proposed, then real estate).
 
 ## 3. Rules that prevent confusion and technical debt
 

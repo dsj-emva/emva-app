@@ -1,6 +1,7 @@
 # The lead score is chance to win times the lead's own stated deal size, on one stable scale
 
-- Status: amended by ADR 0012 (each stage event carries the lead's full score at that moment)
+- Status: amended by ADR 0012 (each stage event carries the lead's full score at that moment); typical deal size
+  confirmed by the user on 2026-10-01 (see Consequences)
 
 Emva sends the platforms a lead score on a fixed, stable scale. The platforms' conversion value and currency
 fields carry it because they require them; the platforms will display and optimise it as money (return on ad
@@ -27,3 +28,5 @@ that needs outside data).
 
 - The advertiser's target return on ad spend is set against the score's scale, so a change of scale is a breaking
   change.
+- The advertiser's typical deal size is set by a person, not learned from recorded deal values, so retraining
+  cannot move the scale (confirmed by the user on 2026-10-01).
