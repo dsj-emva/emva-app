@@ -3,9 +3,10 @@ Backtest and scoring, and its fitted parameters are kept with the model. Pure: n
 
 - A number is standardised with the training leads' mean and standard deviation; a number the
   same for every training lead is only centred.
-- A number missing in training stands at the training mean, and a flag input after it says it
-  is missing, so the model learns what a missing number means. A number missing at scoring is
-  refused when no training lead lacked it, since the model never learned what that means.
+- A missing number stands at the training mean, and a flag input after every number says
+  whether it is missing, so the model learns what a missing number means (ruling 12 of the
+  phase 1 PRD). Where no training lead lacked it, the flag's weight stays near zero under the
+  regularisation, so a missing number is still scored.
 - A category is one-hot over the values the training leads had, most common first; a missing
   category is a value of its own. A value no training lead had is refused.
 """
@@ -29,8 +30,6 @@ class NumberInput(BaseModel):
     column: str
     mean: float
     sd: float
-    # Whether a training lead lacked it, and so whether a flag input says it is missing.
-    missing_seen: bool
 
 
 class CategoryInput(BaseModel):
@@ -54,11 +53,10 @@ class Features(BaseModel):
         row: list[float] = []
         for number in self.numbers:
             value = lead.numbers.get(number.column)
-            if value is None and not number.missing_seen:
-                raise Refused(f"“{number.column}” is missing, and no training lead lacked it.")
-            row.append(0.0 if value is None else (value - number.mean) / number.sd)
-            if number.missing_seen:
-                row.append(1.0 if value is None else 0.0)
+            if value is None:
+                row += [0.0, 1.0]
+            else:
+                row += [(value - number.mean) / number.sd, 0.0]
         for category in self.categories:
             value = lead.categories.get(category.column)
             if value not in category.values:
@@ -72,7 +70,7 @@ class Features(BaseModel):
 
 
 def fit_features(leads: Sequence[FormattedLead]) -> Features:
-    """The parameters fitted on the training leads; the inputs are those of the first lead."""
+    """The parameters fitted on the leads given; the inputs are those of the first lead."""
     first = leads[0] if leads else None
     numbers = []
     for column in first.numbers if first else ():
@@ -83,7 +81,6 @@ def fit_features(leads: Sequence[FormattedLead]) -> Features:
                 column=column,
                 mean=statistics.fmean(given) if given else 0.0,
                 sd=sd or 1.0,
-                missing_seen=len(given) < len(leads),
             )
         )
     categories = [

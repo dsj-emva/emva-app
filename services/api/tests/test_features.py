@@ -21,21 +21,21 @@ def lead(numbers: dict[str, float | None], categories: dict[str, str | None]) ->
     )
 
 
-def test_a_number_is_standardised_with_the_training_mean_and_standard_deviation():
+def test_a_number_is_standardised_with_the_training_mean_and_sd_then_flagged_given():
     features = fit_features([lead({"Nights": n}, {}) for n in (2.0, 4.0, 6.0, 8.0)])
 
-    # Mean 5, standard deviation sqrt(5).
-    assert features.row(lead({"Nights": 10.0}, {})) == pytest.approx([5 / 5**0.5])
-    assert features.row(lead({"Nights": 5.0}, {})) == [0.0]
+    # Mean 5, standard deviation sqrt(5); the flag after it says the number is given.
+    assert features.row(lead({"Nights": 10.0}, {})) == pytest.approx([5 / 5**0.5, 0.0])
+    assert features.row(lead({"Nights": 5.0}, {})) == [0.0, 0.0]
 
 
 def test_a_number_the_same_for_every_training_lead_is_only_centred():
     features = fit_features([lead({"Nights": 3.0}, {}) for _ in range(3)])
 
-    assert features.row(lead({"Nights": 5.0}, {})) == [2.0]
+    assert features.row(lead({"Nights": 5.0}, {})) == [2.0, 0.0]
 
 
-def test_a_number_missing_in_training_is_the_training_mean_and_flagged_as_missing():
+def test_a_missing_number_is_the_training_mean_and_flagged_as_missing():
     features = fit_features([lead({"Budget": b}, {}) for b in (1000.0, 3000.0, None)])
 
     # The mean of the numbers given (2000) stands in for a missing one, and a flag says so.
@@ -43,11 +43,10 @@ def test_a_number_missing_in_training_is_the_training_mean_and_flagged_as_missin
     assert features.row(lead({"Budget": 3000.0}, {})) == [1.0, 0.0]
 
 
-def test_a_number_never_missing_in_training_is_refused_when_missing():
+def test_a_number_never_missing_in_training_is_still_read_when_missing():
     features = fit_features([lead({"Budget": b}, {}) for b in (1000.0, 3000.0)])
 
-    with pytest.raises(Refused, match="“Budget” is missing, and no training lead lacked it."):
-        features.row(lead({"Budget": None}, {}))
+    assert features.row(lead({"Budget": None}, {})) == [0.0, 1.0]
 
 
 def test_a_category_is_one_hot_over_the_training_values_most_common_first():
@@ -82,7 +81,7 @@ def test_numbers_come_before_categories_each_in_the_order_of_the_inputs():
     features = fit_features(leads)
 
     row = lead({"Nights": 4.0, "Party": 1.0}, {"Trip": "Safari", "Channel": "Web"})
-    assert features.row(row) == [1.0, -1.0, 1.0, 0.0, 1.0]
+    assert features.row(row) == [1.0, 0.0, -1.0, 0.0, 1.0, 0.0, 1.0]
 
 
 def test_the_fitted_parameters_are_kept_as_json_and_read_back_the_same():
