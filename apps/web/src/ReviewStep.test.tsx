@@ -105,10 +105,26 @@ function review(mapping: Mapping, rest: Partial<MappingReview> = {}): MappingRev
   }
 }
 
+const NOT_TRAINABLE = {
+  trainable: false,
+  not_trainable_because:
+    'The mapping is not confirmed yet. Nothing trains before a person confirms it.',
+  rule: 'A transition’s model is learned only from at least 10 leads that made it.',
+  latest: null,
+}
+
+// The service, answering whether training can run unless a test says otherwise.
+function reviewService(routes: Parameters<typeof fakeService>[0]) {
+  return fakeService({
+    [`GET ${ADVERTISER}/training`]: () => Response.json(NOT_TRAINABLE),
+    ...routes,
+  })
+}
+
 // A service that keeps the draft it is sent, as the real one does.
 function draftService(start: MappingReview = review(EMPTY)) {
   let current = start
-  const service = fakeService({
+  const service = reviewService({
     [`GET ${ADVERTISER}/files/leads/columns`]: () =>
       Response.json([
         { name: 'Lead ID', examples: ['L-1001'] },
@@ -256,7 +272,7 @@ describe('ReviewStep', () => {
   it('confirms as a separate act and then shows the mapping confirmed and when', async () => {
     const confirmed = review(EMPTY, { problems: [], confirmed_at: '2026-09-20T16:30:00Z' })
     const onChanged = vi.fn()
-    const routes = fakeService({
+    const routes = reviewService({
       [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json([]),
       [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json([]),
       [`GET ${ADVERTISER}/mapping`]: () => Response.json(review(EMPTY, { problems: [] })),
@@ -276,46 +292,44 @@ describe('ReviewStep', () => {
     expect(onChanged).toHaveBeenCalledOnce()
   })
 
-  it('holds back training while the mapping is a draft', async () => {
+  it('offers training as the service says, once, above the mapping', async () => {
     renderReview(draftService().client)
 
     const training = await region('Train the model')
-    expect(training.getByRole('button', { name: 'Train the model' })).toBeDisabled()
+    expect(await training.findByRole('button', { name: 'Train the model' })).toBeDisabled()
+    expect(screen.getAllByRole('region', { name: 'Train the model' })).toHaveLength(1)
   })
 
-  it('holds back training while a confirmed mapping’s data is not formatted yet', async () => {
-    const service = draftService(
-      review(EMPTY, {
-        problems: [],
-        confirmed_at: '2026-09-20T16:30:00Z',
-        still_to_do:
-          'The mapping is confirmed but its data is not formatted yet. Confirm again to format it.',
-      }),
-    )
-    renderReview(service.client)
-
-    const training = await region('Train the model')
-    expect(training.getByRole('button', { name: 'Train the model' })).toBeDisabled()
-  })
-
-  it('offers training once the mapping is confirmed and its data formatted', async () => {
-    const service = fakeService({
-      [`GET ${ADVERTISER}/mapping`]: () =>
-        Response.json(
-          review(EMPTY, {
-            problems: [],
-            confirmed_at: '2026-09-20T16:30:00Z',
-            formatted_at: '2026-09-20T16:30:00Z',
-            formatting: FORMATTED,
-          }),
-        ),
-      [`GET ${ADVERTISER}/training-runs/latest`]: () =>
-        Response.json({ detail: 'The model has not been trained yet.' }, { status: 404 }),
+  it('asks again whether training can run once confirming has formatted the data', async () => {
+    const confirmed = review(EMPTY, {
+      problems: [],
+      confirmed_at: '2026-09-20T16:30:00Z',
+      formatted_at: '2026-09-20T16:30:00Z',
+      formatting: FORMATTED,
     })
-    renderReview(service.client, () => {}, FORMATTED_AND_DELETED)
-
+    let trainable = false
+    const service = reviewService({
+      [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json([]),
+      [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json([]),
+      [`GET ${ADVERTISER}/mapping`]: () => Response.json(review(EMPTY, { problems: [] })),
+      [`POST ${ADVERTISER}/mapping/confirmation`]: () => {
+        trainable = true
+        return Response.json(confirmed)
+      },
+      [`GET ${ADVERTISER}/training`]: () =>
+        Response.json(
+          trainable ? { ...NOT_TRAINABLE, trainable, not_trainable_because: null } : NOT_TRAINABLE,
+        ),
+    })
+    renderReview(service.client)
     const training = await region('Train the model')
-    expect(await training.findByRole('button', { name: 'Train the model' })).toBeEnabled()
+    expect(await training.findByRole('button', { name: 'Train the model' })).toBeDisabled()
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm the mapping' }))
+
+    await waitFor(() =>
+      expect(training.getByRole('button', { name: 'Train the model' })).toBeEnabled(),
+    )
   })
 
   it('shows the summary of what was formatted, exactly as the service returns it', async () => {
@@ -324,7 +338,7 @@ describe('ReviewStep', () => {
       confirmed_at: '2026-09-20T16:30:00Z',
       formatting: FORMATTED,
     })
-    const service = fakeService({
+    const service = reviewService({
       [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json([]),
       [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json([]),
       [`GET ${ADVERTISER}/mapping`]: () => Response.json(review(EMPTY, { problems: [] })),
@@ -370,7 +384,7 @@ describe('ReviewStep', () => {
       formatting: FORMATTED,
       stages_and_lost: named,
     })
-    const service = fakeService({ [`GET ${ADVERTISER}/mapping`]: () => Response.json(confirmed) })
+    const service = reviewService({ [`GET ${ADVERTISER}/mapping`]: () => Response.json(confirmed) })
     renderReview(service.client, () => {}, FORMATTED_AND_DELETED)
 
     const counts = (await region('What was formatted')).getByRole('list', {
@@ -386,7 +400,7 @@ describe('ReviewStep', () => {
       confirmed_at: '2026-09-20T16:30:00Z',
       formatting: FORMATTED,
     })
-    const service = fakeService({ [`GET ${ADVERTISER}/mapping`]: () => Response.json(confirmed) })
+    const service = reviewService({ [`GET ${ADVERTISER}/mapping`]: () => Response.json(confirmed) })
     renderReview(service.client, () => {}, FORMATTED_AND_DELETED)
 
     const leads = await region(LEADS)
@@ -408,7 +422,7 @@ describe('ReviewStep', () => {
     })
     const done = { ...interrupted, still_to_do: null }
     const onChanged = vi.fn()
-    const service = fakeService({
+    const service = reviewService({
       [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json([]),
       [`GET ${ADVERTISER}/mapping`]: () => Response.json(interrupted),
       [`POST ${ADVERTISER}/mapping/confirmation`]: () => Response.json(done),
@@ -436,7 +450,7 @@ describe('ReviewStep', () => {
 
   it('after a refused confirmation, shows the mapping as the service now has it', async () => {
     let confirmedNow = false
-    const service = fakeService({
+    const service = reviewService({
       [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json([]),
       [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json([]),
       [`GET ${ADVERTISER}/mapping`]: () =>
@@ -481,7 +495,7 @@ describe('ReviewStep', () => {
   })
 
   it('shows why the service refused to confirm', async () => {
-    const service = fakeService({
+    const service = reviewService({
       [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json([]),
       [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json([]),
       [`GET ${ADVERTISER}/mapping`]: () => Response.json(review(EMPTY, { problems: [] })),
@@ -512,7 +526,7 @@ describe('ReviewStep', () => {
     let releaseFirst = () => {}
     const firstAnswered = new Promise<void>((resolve) => (releaseFirst = resolve))
     let saves = 0
-    const service = fakeService({
+    const service = reviewService({
       [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json([]),
       [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json([]),
       [`GET ${ADVERTISER}/mapping`]: () => Response.json(review(EMPTY)),
@@ -540,7 +554,7 @@ describe('ReviewStep', () => {
   })
 
   it('says the draft was not saved, instead of showing reasons that may be out of date', async () => {
-    const service = fakeService({
+    const service = reviewService({
       [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json([]),
       [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json([]),
       [`GET ${ADVERTISER}/mapping`]: () => Response.json(review(EMPTY)),

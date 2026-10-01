@@ -3,41 +3,45 @@ import { useEffect, useId, useState } from 'react'
 
 import { refusal, UNREACHABLE } from './service-errors.ts'
 
-type TrainingRunView = components['schemas']['TrainingRunView']
+type TrainingState = components['schemas']['Training']
 type TransitionResult = components['schemas']['TransitionResult']
 
-type Latest =
-  | { state: 'closed' }
+type Loaded =
   | { state: 'loading' }
-  | { state: 'none' }
-  | { state: 'trained'; run: TrainingRunView }
+  | { state: 'failed'; problem: string }
+  | { state: 'loaded'; training: TrainingState }
 
 export function Training({
   client,
   advertiserId,
-  ready,
+  formattedAt,
 }: {
   client: ApiClient
   advertiserId: string
-  // Whether the mapping is confirmed and its data formatted, as the service says.
-  ready: boolean
+  // When the advertiser's data was formatted; whether training can run is asked again when it
+  // changes.
+  formattedAt: string | null
 }) {
-  const [latest, setLatest] = useState<Latest>({ state: ready ? 'loading' : 'closed' })
+  const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' })
   const [training, setTraining] = useState(false)
   const [problem, setProblem] = useState<string | null>(null)
   const headingId = useId()
-  const hintId = useId()
-  const path = { params: { path: { advertiser_id: advertiserId } } }
+  const reasonId = useId()
 
   useEffect(() => {
-    if (!ready) return
     client
-      .GET('/advertisers/{advertiser_id}/training-runs/latest', {
+      .GET('/advertisers/{advertiser_id}/training', {
         params: { path: { advertiser_id: advertiserId } },
       })
-      .then(({ data }) => setLatest(data ? { state: 'trained', run: data } : { state: 'none' }))
-      .catch(() => setLatest({ state: 'none' }))
-  }, [client, advertiserId, ready])
+      .then(({ data, error, response }) =>
+        setLoaded(
+          data
+            ? { state: 'loaded', training: data }
+            : { state: 'failed', problem: refusal(error, response) },
+        ),
+      )
+      .catch(() => setLoaded({ state: 'failed', problem: UNREACHABLE }))
+  }, [client, advertiserId, formattedAt])
 
   async function train() {
     setTraining(true)
@@ -45,9 +49,9 @@ export function Training({
     try {
       const { data, error, response } = await client.POST(
         '/advertisers/{advertiser_id}/training-runs',
-        path,
+        { params: { path: { advertiser_id: advertiserId } } },
       )
-      if (data) setLatest({ state: 'trained', run: data })
+      if (data) setLoaded({ state: 'loaded', training: data })
       else setProblem(refusal(error, response))
     } catch {
       setProblem(UNREACHABLE)
@@ -56,43 +60,53 @@ export function Training({
     }
   }
 
-  const trained = latest.state === 'trained'
   return (
     <section className="training" aria-labelledby={headingId}>
       <h3 id={headingId}>Train the model</h3>
-      <p className="muted">
-        One model per transition, from Contact attempted to Won, learned from the formatted
-        leads. A transition is learned only from at least 10 leads that made it and 10 that
-        failed it.
-      </p>
-      <div className="training-action">
-        <button
-          type="button"
-          className="primary"
-          disabled={!ready || training || latest.state === 'loading'}
-          aria-describedby={ready ? undefined : hintId}
-          onClick={train}
-        >
-          {training ? 'Training…' : trained ? 'Train again' : 'Train the model'}
-        </button>
-        {!ready && (
-          <p id={hintId} className="muted">
-            Training opens once the mapping is confirmed and its data formatted.
-          </p>
-        )}
-        {trained && (
-          <p className="muted" aria-live="polite">
-            Trained <time dateTime={latest.run.trained_at}>{formatTime(latest.run.trained_at)}</time>
-            .
-          </p>
-        )}
-      </div>
-      {problem && (
+      {loaded.state === 'loading' && <p className="muted">Reading the training…</p>}
+      {loaded.state === 'failed' && (
         <p className="problem" role="alert">
-          {problem}
+          {loaded.problem}
         </p>
       )}
-      {trained && <Transitions transitions={latest.run.transitions} />}
+      {loaded.state === 'loaded' && (
+        <>
+          <p className="muted">{loaded.training.rule}</p>
+          <div className="training-action">
+            <button
+              type="button"
+              className="primary"
+              disabled={!loaded.training.trainable || training}
+              aria-describedby={loaded.training.trainable ? undefined : reasonId}
+              onClick={train}
+            >
+              {training ? 'Training…' : loaded.training.latest ? 'Train again' : 'Train the model'}
+            </button>
+            {loaded.training.not_trainable_because && (
+              <p id={reasonId} className="muted">
+                {loaded.training.not_trainable_because}
+              </p>
+            )}
+            {loaded.training.latest && (
+              <p className="muted" aria-live="polite">
+                Trained{' '}
+                <time dateTime={loaded.training.latest.trained_at}>
+                  {formatTime(loaded.training.latest.trained_at)}
+                </time>
+                .
+              </p>
+            )}
+          </div>
+          {problem && (
+            <p className="problem" role="alert">
+              {problem}
+            </p>
+          )}
+          {loaded.training.latest && (
+            <Transitions transitions={loaded.training.latest.transitions} />
+          )}
+        </>
+      )}
     </section>
   )
 }
@@ -119,22 +133,18 @@ function Transitions({ transitions }: { transitions: TransitionResult[] }) {
         </thead>
         <tbody>
           {transitions.map((t) => (
-            <tr key={t.name}>
-              <th scope="row">{t.name}</th>
+            <tr key={t.transition.name}>
+              <th scope="row">{t.transition.name}</th>
               <td className="number data">{t.made}</td>
               <td className="number data">{t.failed}</td>
               <td className="number data">{t.unfinished}</td>
               <td>
-                {t.learned ? (
-                  <span className="learned">Learned</span>
-                ) : (
-                  <span className="too-few">
-                    Too few to learn:{' '}
-                    {t.observed_rate === null
-                      ? 'no lead has finished it yet'
-                      : `observed rate ${formatRate(t.observed_rate)}`}
-                  </span>
-                )}
+                <span className={t.fitted ? 'learned' : 'too-few'}>
+                  {t.verdict}
+                  {!t.fitted &&
+                    t.smoothed_rate !== null &&
+                    `: smoothed rate ${formatRate(t.smoothed_rate)}`}
+                </span>
               </td>
             </tr>
           ))}
