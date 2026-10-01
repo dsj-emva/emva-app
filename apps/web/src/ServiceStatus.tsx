@@ -1,7 +1,7 @@
 import type { ApiClient, components } from '@emva/api-client'
 import { useEffect, useState } from 'react'
 
-import { isGatewayFailure } from './service-errors.ts'
+import { ANSWERED_WITH_ERROR, isGatewayFailure, UNREACHABLE } from './service-errors.ts'
 
 type Health = components['schemas']['Health']
 type Check =
@@ -27,8 +27,8 @@ export function ServiceStatus({ client }: { client: ApiClient }) {
     <p className="service-status" data-state={check.state}>
       {check.state === 'checking' && 'Checking the service…'}
       {check.state === 'answered' && `Service status: ${check.health.status}`}
-      {check.state === 'failed' && 'Service answered with an error'}
-      {check.state === 'unreachable' && 'Service unreachable'}
+      {check.state === 'failed' && ANSWERED_WITH_ERROR}
+      {check.state === 'unreachable' && UNREACHABLE}
     </p>
   )
 }

@@ -92,7 +92,7 @@ function FilePanel({
       </p>
       <h3 id={headingId}>{label}</h3>
       <p className="muted">{holds}</p>
-      {file ? (
+      {file && (
         <dl className="file-facts">
           <div>
             <dt>File</dt>
@@ -107,26 +107,27 @@ function FilePanel({
             <dd className="data">{formatTime(file.uploaded_at)}</dd>
           </div>
         </dl>
-      ) : (
-        <div className="file-pick">
-          <label htmlFor={inputId} className="secondary" data-busy={sending}>
-            {sending ? 'Uploading…' : `Choose the ${label.toLowerCase()}`}
-          </label>
-          <input
-            id={inputId}
-            type="file"
-            accept=".csv,text/csv"
-            className="visually-hidden"
-            disabled={sending}
-            onChange={choose}
-          />
-          {problem && (
-            <p className="problem" role="alert">
-              {problem}
-            </p>
-          )}
-        </div>
       )}
+      <div className="file-pick">
+        <label htmlFor={inputId} className="secondary" data-busy={sending}>
+          {sending
+            ? 'Uploading…'
+            : `${file ? 'Replace' : 'Choose'} the ${label.toLowerCase()}`}
+        </label>
+        <input
+          id={inputId}
+          type="file"
+          accept=".csv,text/csv"
+          className="visually-hidden"
+          disabled={sending}
+          onChange={choose}
+        />
+        {problem && (
+          <p className="problem" role="alert">
+            {problem}
+          </p>
+        )}
+      </div>
     </section>
   )
 }

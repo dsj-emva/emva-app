@@ -16,21 +16,23 @@ const LEADS_FILE: FileProfile = {
   file_name: 'leads.csv',
   uploaded_at: '2026-09-15T08:45:00Z',
   row_count: 101,
-  columns: [
-    { name: 'Lead ID', examples: ['L-1001', 'L-1002', 'L-1003'] },
-    { name: 'Trip Type', examples: ['Safari', 'Family holiday'] },
-  ],
+  column_names: ['Lead ID', 'Trip Type'],
 }
 const STAGE_HISTORY_FILE: FileProfile = {
   kind: 'stage-history',
   file_name: 'stage_history.csv',
   uploaded_at: '2026-09-15T08:46:00Z',
   row_count: 418,
-  columns: [
-    { name: 'Lead ID', examples: ['L-1001'] },
-    { name: 'Stage', examples: ['New enquiry', 'Call attempted'] },
-  ],
+  column_names: ['Lead ID', 'Stage'],
 }
+const LEADS_COLUMNS = [
+  { name: 'Lead ID', examples: ['L-1001', 'L-1002', 'L-1003'] },
+  { name: 'Trip Type', examples: ['Safari', 'Family holiday'] },
+]
+const STAGE_HISTORY_COLUMNS = [
+  { name: 'Lead ID', examples: ['L-1001'] },
+  { name: 'Stage', examples: ['New enquiry', 'Call attempted'] },
+]
 
 function advertiser(files: Partial<Advertiser> = {}): Advertiser {
   return {
@@ -59,6 +61,7 @@ async function nameTheAdvertiser() {
     target: { value: 'Savanna Journeys' },
   })
   fireEvent.click(screen.getByLabelText('Hand-made test data'))
+  expect(screen.getByRole('group', { name: 'Data source' })).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Start' }))
   await screen.findByRole('heading', { name: 'Savanna Journeys' })
 }
@@ -151,6 +154,8 @@ describe('AdvertiserPage', () => {
   it("reviews each file's row count and columns with example values", async () => {
     const service = fakeService({
       'POST /advertisers': () => Response.json(BOTH_UPLOADED, { status: 201 }),
+      [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json(LEADS_COLUMNS),
+      [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json(STAGE_HISTORY_COLUMNS),
     })
     render(<AdvertiserPage client={service.client} />)
     await nameTheAdvertiser()
@@ -159,16 +164,35 @@ describe('AdvertiserPage', () => {
 
     const leads = await screen.findByRole('region', { name: 'Leads file: leads.csv' })
     expect(within(leads).getByText('101 rows')).toBeInTheDocument()
-    const tripType = within(leads).getByRole('row', { name: /Trip Type/ })
+    const tripType = await within(leads).findByRole('row', { name: /Trip Type/ })
     expect(tripType).toHaveTextContent('Safari')
     expect(tripType).toHaveTextContent('Family holiday')
     const history = screen.getByRole('region', { name: 'Stage-history file: stage_history.csv' })
     expect(within(history).getByText('418 rows')).toBeInTheDocument()
   })
 
+  it('replaces an uploaded file with the one the person picks next', async () => {
+    const replaced = { ...LEADS_FILE, file_name: 'right-export.csv', row_count: 99 }
+    const service = fakeService({
+      'POST /advertisers': () => Response.json(advertiser({ leads_file: LEADS_FILE }), { status: 201 }),
+      [`PUT ${ADVERTISER}/files/leads`]: () => Response.json(replaced),
+      [`GET ${ADVERTISER}`]: () => Response.json(advertiser({ leads_file: replaced })),
+    })
+    render(<AdvertiserPage client={service.client} />)
+    await nameTheAdvertiser()
+
+    chooseFile('Replace the leads file', csv('right-export.csv'))
+
+    const panel = screen.getByRole('region', { name: 'Leads file' })
+    expect(await within(panel).findByText('right-export.csv')).toBeInTheDocument()
+    expect(within(panel).getByText('99 rows')).toBeInTheDocument()
+  })
+
   it('lists every CRM stage name in the column the person picks, with its row count', async () => {
     const service = fakeService({
       'POST /advertisers': () => Response.json(BOTH_UPLOADED, { status: 201 }),
+      [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json(LEADS_COLUMNS),
+      [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json(STAGE_HISTORY_COLUMNS),
       [`GET ${ADVERTISER}/files/stage-history/crm-stages`]: (request) =>
         new URL(request.url).searchParams.get('column') === 'Stage'
           ? Response.json([

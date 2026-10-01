@@ -6,11 +6,11 @@ type FileProfile = components['schemas']['FileProfile']
 
 // The two files an advertiser uploads, in the order they are shown.
 export const FILES: { kind: FileKind; label: string; holds: string }[] = [
-  { kind: 'leads', label: 'Leads file', holds: 'One row per lead, as the CRM exports it.' },
+  { kind: 'leads', label: 'Leads file', holds: 'One row per lead, as the CRM or form tool writes it.' },
   {
     kind: 'stage-history',
     label: 'Stage-history file',
-    holds: "One row per change of a lead's stage, as the CRM records it.",
+    holds: "One row per change of a lead's CRM stage.",
   },
 ]
 

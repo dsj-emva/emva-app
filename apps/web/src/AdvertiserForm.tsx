@@ -49,7 +49,7 @@ export function AdvertiserForm({
         />
       </div>
       <fieldset className="field">
-        <legend>Where the data comes from</legend>
+        <legend>Data source</legend>
         <div className="choices">
           {DATA_SOURCES.map(({ value, label }) => (
             <label key={value} className="choice">

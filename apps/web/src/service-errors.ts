@@ -2,15 +2,16 @@
 const GATEWAY_FAILURES = new Set([502, 503, 504])
 
 export const UNREACHABLE = 'Service unreachable'
+export const ANSWERED_WITH_ERROR = 'Service answered with an error'
 
-// The message to show when the service did not do what was asked: its own reason when it gave one.
+// The message to show when the service did not do what was asked: its own reason when it gave
+// one (it may answer 503 itself), otherwise whether it could be reached at all.
 export function refusal(error: unknown, response: Response): string {
-  if (GATEWAY_FAILURES.has(response.status)) return UNREACHABLE
   if (typeof error === 'object' && error !== null && 'detail' in error) {
     const { detail } = error
     if (typeof detail === 'string') return detail
   }
-  return 'Service answered with an error'
+  return isGatewayFailure(response) ? UNREACHABLE : ANSWERED_WITH_ERROR
 }
 
 export function isGatewayFailure(response: Response): boolean {

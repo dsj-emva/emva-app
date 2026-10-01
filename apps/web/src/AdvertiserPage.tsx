@@ -55,8 +55,8 @@ export function AdvertiserPage({ client }: { client: ApiClient }) {
           <>
             <h1>Bring in an advertiser's history</h1>
             <p className="lede">
-              Name the advertiser and say where its data comes from, then upload its leads file and
-              stage-history file exactly as the CRM exported them.
+              Name the advertiser and pick its data source, then upload its leads file and
+              stage-history file exactly as they were exported.
             </p>
             <AdvertiserForm client={client} onCreated={setAdvertiser} />
           </>
