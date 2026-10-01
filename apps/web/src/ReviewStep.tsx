@@ -336,8 +336,8 @@ function Formatted({
     <section className="formatted" aria-labelledby={headingId}>
       <h3 id={headingId}>What was formatted</h3>
       <p className="muted">
-        Names were removed, identifiers, emails and phones scrambled, and every unmarked column
-        dropped{rawFilesDeleted ? ', and the raw files deleted.' : '.'}
+        Names were removed; identifiers, emails and phones scrambled; every unmarked column
+        dropped{rawFilesDeleted ? '; and the raw files deleted.' : '.'}
       </p>
       <p id={countsId} className="visually-hidden">
         Leads by outcome
