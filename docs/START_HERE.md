@@ -62,6 +62,8 @@ Rules that keep the documents and the code in step:
 2. The exact volume and timing thresholds for moving the platform's learning event to a later stage, per platform,
    checked against current platform guidance (decision 0012). Needed only in phase 6.
 3. Which pilot advertiser, and so which industry first (planned hospitality proposed, then real estate).
+4. What happens to a won deal that is later cancelled or refunded. For now Won is final (ruled on 2026-10-01).
+   It touches the **Outcome** of decision 0002 and the **Canonical ladder**. To be settled in phase 2.
 
 ## 3. Rules that prevent confusion and technical debt
 
