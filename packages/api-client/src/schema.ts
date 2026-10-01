@@ -247,6 +247,59 @@ export interface components {
             review_available: boolean;
             stage_history_file: components["schemas"]["FileProfile"] | null;
         };
+        /** Backtest */
+        Backtest: {
+            /**
+             * As Of
+             * Format: date-time
+             * @description When the Outcomes compared with were read
+             */
+            as_of: string;
+            /**
+             * Auc
+             * @description Null unless both won and lost leads were scored
+             */
+            auc: number | null;
+            /** Checks */
+            checks: components["schemas"]["Check"][];
+            /** @description Null when no lead was scored */
+            comparison: components["schemas"]["Comparison"] | null;
+            counts: components["schemas"]["Counts"];
+            /** Folds */
+            folds: components["schemas"]["FoldResult"][];
+            /** Groups */
+            groups: components["schemas"]["Group"][];
+            /**
+             * Passed
+             * @description Whether every check of the Trust gate passed
+             */
+            readonly passed: boolean;
+            /** Rules */
+            rules: string[];
+            /**
+             * Slope
+             * @description Null when it cannot be fitted on the leads scored
+             */
+            slope: number | null;
+            /**
+             * Slope Missing Because
+             * @description Why there is no slope; null with one
+             */
+            slope_missing_because: string | null;
+            wording: components["schemas"]["Wording"];
+        };
+        /**
+         * Check
+         * @description One check of the Trust gate.
+         */
+        Check: {
+            /** Name */
+            name: string;
+            /** Passed */
+            passed: boolean;
+            /** Threshold */
+            threshold: string;
+        };
         /** Choice */
         Choice: {
             /** Label */
@@ -273,6 +326,47 @@ export interface components {
          * @enum {string}
          */
         ColumnKind: "number" | "category";
+        /**
+         * Comparison
+         * @description Emva against the Status-quo signal, by Brier score (lower is more accurate).
+         */
+        Comparison: {
+            /**
+             * Difference
+             * @description Status quo's Brier score minus Emva's, per lead
+             */
+            difference: number;
+            /** Emva Brier */
+            emva_brier: number;
+            /** Interval High */
+            interval_high: number;
+            /** Interval Low */
+            interval_low: number;
+            /** Status Quo Brier */
+            status_quo_brier: number;
+        };
+        /** Counts */
+        Counts: {
+            /** Leads */
+            leads: number;
+            /**
+             * No Outcome Yet
+             * @description Leads neither won nor lost yet: left out
+             */
+            no_outcome_yet: number;
+            /**
+             * Refused
+             * @description Leads that could not be scored, by reason
+             */
+            refused: components["schemas"]["Refusals"][];
+            /** Scored */
+            scored: number;
+            /**
+             * Training Only
+             * @description Leads of the first fold: trained on, never scored
+             */
+            training_only: number;
+        };
         /** CrmStage */
         CrmStage: {
             /** Name */
@@ -344,6 +438,45 @@ export interface components {
              * Format: date-time
              */
             uploaded_at: string;
+        };
+        /** FoldResult */
+        FoldResult: {
+            /** Leads */
+            leads: number;
+            /**
+             * Start
+             * Format: date-time
+             * @description When its first lead was submitted
+             */
+            start: string;
+            /**
+             * Status Quo Rate
+             * @description The win rate of the leads before it with an Outcome at its start
+             */
+            status_quo_rate: number | null;
+            /**
+             * Trained On
+             * @description Leads submitted before its start
+             */
+            trained_on: number;
+        };
+        /**
+         * Group
+         * @description One calibration group.
+         */
+        Group: {
+            /**
+             * Actual
+             * @description The share of the group's leads that were won
+             */
+            actual: number;
+            /** Leads */
+            leads: number;
+            /**
+             * Predicted
+             * @description The group's mean predicted chance of winning
+             */
+            predicted: number;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -516,6 +649,13 @@ export interface components {
             /** Detail */
             detail: string;
         };
+        /** Refusals */
+        Refusals: {
+            /** Leads */
+            leads: number;
+            /** Reason */
+            reason: string;
+        };
         /** ScoredLead */
         ScoredLead: {
             /** Chance Of Winning */
@@ -686,11 +826,23 @@ export interface components {
         };
         /** TrainingRunView */
         TrainingRunView: {
+            /** @description The run's Backtest; null when its results are unavailable */
+            backtest: components["schemas"]["Backtest"] | null;
+            /**
+             * Data Source
+             * @description The label every number of the run carries, e.g. 'on hand-made test data'
+             */
+            data_source: string;
             /**
              * Id
              * Format: uuid
              */
             id: string;
+            /**
+             * Results Unavailable Because
+             * @description Why the Backtest's results are unavailable; null when they are shown
+             */
+            results_unavailable_because: string | null;
             /**
              * Trained At
              * Format: date-time
@@ -774,6 +926,28 @@ export interface components {
             msg: string;
             /** Error Type */
             type: string;
+        };
+        /**
+         * Wording
+         * @description What the screen says beside the numbers, so every rule is stated by the service.
+         */
+        Wording: {
+            /** Auc */
+            auc: string;
+            /**
+             * Auc Missing
+             * @description Said instead of AUC when it is null
+             */
+            auc_missing: string;
+            /**
+             * Better Side
+             * @description Which side of zero means Emva is the more accurate
+             */
+            better_side: string;
+            /** Calibration */
+            calibration: string;
+            /** Comparison */
+            comparison: string;
         };
     };
     responses: never;

@@ -46,6 +46,16 @@ class DataSource(enum.StrEnum):
     PUBLIC = "public"
     PRIVATE = "private"
 
+    @property
+    def label(self) -> str:
+        """What every number from it carries, e.g. a slope "on hand-made test data"."""
+        return {
+            DataSource.HAND_MADE_TEST: "on hand-made test data",
+            DataSource.SIMULATED: "on simulated data",
+            DataSource.PUBLIC: "on public data",
+            DataSource.PRIVATE: "on the advertiser's private export",
+        }[self]
+
 
 class FileKind(enum.StrEnum):
     LEADS = "leads"
@@ -162,8 +172,9 @@ class Formatting(Base):
 
 
 class TrainingRun(Base):
-    """One fit of the models on the advertiser's formatted data; the model itself (its
-    parameters, as JSON) lives in object storage under model_key."""
+    """One fit of the models on the advertiser's formatted data, together with its Backtest; the
+    model itself (its parameters, as JSON) lives in object storage under model_key, and the
+    Backtest's results, as JSON, under backtest_key."""
 
     __tablename__ = "training_run"
     __table_args__ = (Index("training_run_advertiser_id", "advertiser_id", "number"),)
@@ -175,6 +186,8 @@ class TrainingRun(Base):
     advertiser_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("advertiser.id"))
     trained_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     model_key: Mapped[str] = mapped_column(String(255))
+    # Null for a run trained before Backtests were kept.
+    backtest_key: Mapped[str | None] = mapped_column(String(255))
 
 
 def keep_formatted(

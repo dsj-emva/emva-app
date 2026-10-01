@@ -2,6 +2,7 @@ import type { components } from '@emva/api-client'
 import { fireEvent, render, screen, within } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
+import { BACKTEST } from './test-backtest.ts'
 import { fakeService } from './test-service.ts'
 import { Training } from './Training.tsx'
 
@@ -40,6 +41,9 @@ const RUN: TrainingRunView = {
       smoothed_rate: 0.72,
     },
   ],
+  data_source: 'on hand-made test data',
+  backtest: BACKTEST,
+  results_unavailable_because: null,
 }
 
 const TRAINABLE: TrainingState = {
@@ -99,6 +103,26 @@ describe('Training', () => {
     expect(
       await screen.findByRole('table', { name: 'What each transition learned from' }),
     ).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Backtest results' })).toBeInTheDocument()
+  })
+
+  it('says why the latest run’s Backtest results are unavailable, as the service does', async () => {
+    const because =
+      'This run was trained before Backtests were kept. Train again to see its results.'
+    const service = fakeService({
+      [`GET ${TRAINING}`]: () =>
+        Response.json({
+          ...TRAINABLE,
+          latest: { ...RUN, backtest: null, results_unavailable_because: because },
+        }),
+    })
+    renderTraining(service.client)
+
+    expect(await screen.findByText(because)).toBeInTheDocument()
+    expect(
+      screen.getByRole('table', { name: 'What each transition learned from' }),
+    ).toBeInTheDocument()
+    expect(screen.queryByRole('region', { name: 'Backtest results' })).not.toBeInTheDocument()
   })
 
   it('shows why the training could not be read, and offers no training', async () => {
