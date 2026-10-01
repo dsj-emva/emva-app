@@ -1,10 +1,16 @@
 import type { ApiClient, components } from '@emva/api-client'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 
-import { DATA_SOURCES, type DataSource } from './data-sources.ts'
 import { refusal, UNREACHABLE } from './service-errors.ts'
 
 type Advertiser = components['schemas']['Advertiser']
+type DataSource = components['schemas']['DataSource']
+type DataSourceChoice = components['schemas']['DataSourceChoice']
+
+type Sources =
+  | { state: 'loading' }
+  | { state: 'failed'; problem: string }
+  | { state: 'loaded'; choices: DataSourceChoice[] }
 
 export function AdvertiserForm({
   client,
@@ -17,6 +23,20 @@ export function AdvertiserForm({
   const [source, setSource] = useState<DataSource | null>(null)
   const [problem, setProblem] = useState<string | null>(null)
   const [sending, setSending] = useState(false)
+  const [sources, setSources] = useState<Sources>({ state: 'loading' })
+
+  useEffect(() => {
+    client
+      .GET('/data-sources')
+      .then(({ data, error, response }) =>
+        setSources(
+          data
+            ? { state: 'loaded', choices: data }
+            : { state: 'failed', problem: refusal(error, response) },
+        ),
+      )
+      .catch(() => setSources({ state: 'failed', problem: UNREACHABLE }))
+  }, [client])
 
   async function submit(event: FormEvent) {
     event.preventDefault()
@@ -50,8 +70,14 @@ export function AdvertiserForm({
       </div>
       <fieldset className="field">
         <legend>Data source</legend>
+        {sources.state === 'loading' && <p className="muted">Reading the data sources…</p>}
+        {sources.state === 'failed' && (
+          <p className="problem" role="alert">
+            {sources.problem}
+          </p>
+        )}
         <div className="choices">
-          {DATA_SOURCES.map(({ value, label }) => (
+          {(sources.state === 'loaded' ? sources.choices : []).map(({ value, label }) => (
             <label key={value} className="choice">
               <input
                 type="radio"

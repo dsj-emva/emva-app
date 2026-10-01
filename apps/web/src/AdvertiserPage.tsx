@@ -2,7 +2,6 @@ import type { ApiClient, components } from '@emva/api-client'
 import { useState } from 'react'
 
 import { AdvertiserForm } from './AdvertiserForm.tsx'
-import { dataSourceLabel } from './data-sources.ts'
 import { ReviewStep } from './ReviewStep.tsx'
 import { ServiceStatus } from './ServiceStatus.tsx'
 import { UploadStep } from './UploadStep.tsx'
@@ -62,7 +61,7 @@ export function AdvertiserPage({ client }: { client: ApiClient }) {
           </>
         ) : (
           <>
-            <p className="eyebrow">{dataSourceLabel(advertiser.data_source)}</p>
+            <p className="eyebrow">{advertiser.data_source_label}</p>
             <h2 className="advertiser-name">{advertiser.name}</h2>
             {step === 'upload' ? (
               <UploadStep client={client} advertiser={advertiser} onChanged={setAdvertiser} />

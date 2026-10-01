@@ -32,7 +32,6 @@ from emva_api.formatter import Unreadable, format_lead
 from emva_api.mapping import ColumnKind, Mapping
 from emva_api.model import Model, NoChance
 from emva_api.object_store import ObjectStore
-from emva_api.records import DataSource
 from emva_api.scoring import NOT_GIVEN, NotLearned, Score, check_inputs, score, value_text
 from emva_api.training_runs import STORAGE_FAILED, latest_run
 
@@ -87,7 +86,9 @@ class EnteredLead(BaseModel):
 
 
 class ScoredLead(Score):
-    data_source: DataSource = Field(description="Where the data the model learned from came from")
+    data_source: str = Field(
+        description="The label of the data the model learned from, e.g. 'on hand-made test data'"
+    )
 
 
 @router.get(
@@ -168,7 +169,7 @@ def score_lead(
         raise HTTPException(status.HTTP_409_CONFLICT, str(problem)) from problem
     except (Unreadable, Refused) as problem:
         _refuse(str(problem))
-    return ScoredLead(**dict(scored), data_source=advertiser.data_source)
+    return ScoredLead(**dict(scored), data_source=advertiser.data_source.label)
 
 
 def _latest(

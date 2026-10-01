@@ -1,7 +1,6 @@
 import type { ApiClient, components } from '@emva/api-client'
 import { type FormEvent, useEffect, useId, useState } from 'react'
 
-import { dataSourceLabel } from './data-sources.ts'
 import { refusal, UNREACHABLE } from './service-errors.ts'
 
 type ScoringForm = components['schemas']['ScoringForm']
@@ -173,7 +172,7 @@ function InputField({
 function Result({ scored }: { scored: ScoredLead }) {
   return (
     <div className="score-result">
-      <p className="eyebrow">On {dataSourceLabel(scored.data_source).toLowerCase()}</p>
+      <p className="eyebrow">{scored.data_source}</p>
       <dl className="score-figures" aria-live="polite">
         <div>
           <dt>Chance of winning</dt>

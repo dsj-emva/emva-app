@@ -42,6 +42,7 @@ function advertiser(files: Partial<Advertiser> = {}): Advertiser {
     id: ID,
     name: 'Savanna Journeys',
     data_source: 'hand_made_test',
+    data_source_label: 'on hand-made test data',
     leads_file: null,
     stage_history_file: null,
     review_available: false,
@@ -56,6 +57,16 @@ const BOTH_UPLOADED = advertiser({
   review_available: true,
 })
 
+const DATA_SOURCES = [
+  { value: 'hand_made_test', label: 'on hand-made test data' },
+  { value: 'simulated', label: 'on simulated data' },
+]
+
+// The service with the Data sources the advertiser form offers.
+function serviceWith(routes: Parameters<typeof fakeService>[0]) {
+  return fakeService({ 'GET /data-sources': () => Response.json(DATA_SOURCES), ...routes })
+}
+
 function csv(name: string) {
   return new File(['Lead ID\nL-1001\n'], name, { type: 'text/csv' })
 }
@@ -64,7 +75,7 @@ async function nameTheAdvertiser() {
   fireEvent.change(screen.getByLabelText('Advertiser name'), {
     target: { value: 'Savanna Journeys' },
   })
-  fireEvent.click(screen.getByLabelText('Hand-made test data'))
+  fireEvent.click(await screen.findByLabelText('on hand-made test data'))
   expect(screen.getByRole('group', { name: 'Data source' })).toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Start' }))
   await screen.findByRole('heading', { name: 'Savanna Journeys' })
@@ -76,7 +87,7 @@ function chooseFile(label: string, file: File) {
 
 describe('AdvertiserPage', () => {
   it('creates the advertiser with its name and data source', async () => {
-    const service = fakeService({
+    const service = serviceWith({
       'POST /advertisers': () => Response.json(advertiser(), { status: 201 }),
     })
     render(<AdvertiserPage client={service.client} />)
@@ -87,11 +98,11 @@ describe('AdvertiserPage', () => {
       name: 'Savanna Journeys',
       data_source: 'hand_made_test',
     })
-    expect(screen.getByText('Hand-made test data')).toBeInTheDocument()
+    expect(screen.getByText('on hand-made test data')).toBeInTheDocument()
   })
 
   it('uploads a chosen file as it is and shows its name and row count', async () => {
-    const service = fakeService({
+    const service = serviceWith({
       'POST /advertisers': () => Response.json(advertiser(), { status: 201 }),
       [`PUT ${ADVERTISER}/files/leads`]: () => Response.json(LEADS_FILE),
       [`GET ${ADVERTISER}`]: () => Response.json(advertiser({ leads_file: LEADS_FILE })),
@@ -111,7 +122,7 @@ describe('AdvertiserPage', () => {
   })
 
   it('shows why the service refused a file', async () => {
-    const service = fakeService({
+    const service = serviceWith({
       'POST /advertisers': () => Response.json(advertiser(), { status: 201 }),
       [`PUT ${ADVERTISER}/files/stage-history`]: () =>
         Response.json({ detail: 'The file is empty.' }, { status: 400 }),
@@ -126,7 +137,7 @@ describe('AdvertiserPage', () => {
   })
 
   it('keeps the review closed until the service says both files are uploaded', async () => {
-    const service = fakeService({
+    const service = serviceWith({
       'POST /advertisers': () => Response.json(advertiser(), { status: 201 }),
       [`PUT ${ADVERTISER}/files/leads`]: () => Response.json(LEADS_FILE),
       [`PUT ${ADVERTISER}/files/stage-history`]: () => Response.json(STAGE_HISTORY_FILE),
@@ -142,7 +153,7 @@ describe('AdvertiserPage', () => {
   })
 
   it('opens the review once both files are uploaded', async () => {
-    const service = fakeService({
+    const service = serviceWith({
       'POST /advertisers': () => Response.json(advertiser({ leads_file: LEADS_FILE }), { status: 201 }),
       [`PUT ${ADVERTISER}/files/stage-history`]: () => Response.json(STAGE_HISTORY_FILE),
       [`GET ${ADVERTISER}`]: () => Response.json(BOTH_UPLOADED),
@@ -156,7 +167,7 @@ describe('AdvertiserPage', () => {
   })
 
   it("reviews each file's row count and columns with example values", async () => {
-    const service = fakeService({
+    const service = serviceWith({
       'POST /advertisers': () => Response.json(BOTH_UPLOADED, { status: 201 }),
       [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json(LEADS_COLUMNS),
       [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json(STAGE_HISTORY_COLUMNS),
@@ -185,7 +196,7 @@ describe('AdvertiserPage', () => {
 
   it('replaces an uploaded file with the one the person picks next', async () => {
     const replaced = { ...LEADS_FILE, file_name: 'right-export.csv', row_count: 99 }
-    const service = fakeService({
+    const service = serviceWith({
       'POST /advertisers': () => Response.json(advertiser({ leads_file: LEADS_FILE }), { status: 201 }),
       [`PUT ${ADVERTISER}/files/leads`]: () => Response.json(replaced),
       [`GET ${ADVERTISER}`]: () => Response.json(advertiser({ leads_file: replaced })),
@@ -214,7 +225,7 @@ describe('AdvertiserPage', () => {
       crm_stages: [],
       ...CHOICES,
     })
-    const service = fakeService({
+    const service = serviceWith({
       'POST /advertisers': () => Response.json(BOTH_UPLOADED, { status: 201 }),
       [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json(LEADS_COLUMNS),
       [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json(STAGE_HISTORY_COLUMNS),
@@ -240,7 +251,7 @@ describe('AdvertiserPage', () => {
 
   it('stops offering to replace the files once the mapping is confirmed, and says why', async () => {
     const confirmed = { ...BOTH_UPLOADED, mapping_confirmed_at: '2026-09-20T16:30:00Z' }
-    const service = fakeService({
+    const service = serviceWith({
       'POST /advertisers': () => Response.json(BOTH_UPLOADED, { status: 201 }),
       [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json(LEADS_COLUMNS),
       [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json(STAGE_HISTORY_COLUMNS),

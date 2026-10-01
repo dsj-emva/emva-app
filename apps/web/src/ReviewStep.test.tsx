@@ -18,6 +18,7 @@ const BOTH_UPLOADED: Advertiser = {
   id: ID,
   name: 'Savanna Journeys',
   data_source: 'hand_made_test',
+  data_source_label: 'on hand-made test data',
   leads_file: {
     kind: 'leads',
     file_name: 'leads.csv',

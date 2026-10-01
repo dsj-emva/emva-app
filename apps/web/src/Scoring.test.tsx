@@ -35,7 +35,7 @@ const FORM: ScoringForm = {
 }
 
 const SCORED: ScoredLead = {
-  data_source: 'hand_made_test',
+  data_source: 'on hand-made test data',
   chance_of_winning: 0.125,
   typical_deal_size: 12000,
   lead_score: 1500,
@@ -146,7 +146,7 @@ describe('Scoring', () => {
       figures.getByText('A Lead score: a relative measure of quality, not money.'),
     ).toBeInTheDocument()
     expect(figures.getByText('Typical deal size used').nextSibling).toHaveTextContent('12,000')
-    expect(screen.getByText('On hand-made test data')).toBeInTheDocument()
+    expect(screen.getByText('on hand-made test data')).toBeInTheDocument()
 
     const rows = within(explanation)
       .getAllByRole('listitem')

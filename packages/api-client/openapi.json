@@ -6,6 +6,11 @@
           "data_source": {
             "$ref": "#/components/schemas/DataSource"
           },
+          "data_source_label": {
+            "description": "The label every number from its data carries, e.g. 'on hand-made test data'",
+            "title": "Data Source Label",
+            "type": "string"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -58,6 +63,7 @@
           "id",
           "name",
           "data_source",
+          "data_source_label",
           "leads_file",
           "stage_history_file",
           "review_available",
@@ -355,6 +361,24 @@
         ],
         "title": "DataSource",
         "type": "string"
+      },
+      "DataSourceChoice": {
+        "properties": {
+          "label": {
+            "description": "What every number from it carries, e.g. 'on public data'",
+            "title": "Label",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/DataSource"
+          }
+        },
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "DataSourceChoice",
+        "type": "object"
       },
       "DateOrder": {
         "enum": [
@@ -947,8 +971,9 @@
             "type": "number"
           },
           "data_source": {
-            "$ref": "#/components/schemas/DataSource",
-            "description": "Where the data the model learned from came from"
+            "description": "The label of the data the model learned from, e.g. 'on hand-made test data'",
+            "title": "Data Source",
+            "type": "string"
           },
           "explanation": {
             "$ref": "#/components/schemas/Explanation"
@@ -2115,7 +2140,7 @@
                 }
               }
             },
-            "description": "No Training run yet, or none from which a chance can be known"
+            "description": "No Training run yet, none from which a chance can be known, or a Mapping whose inputs are not the ones it learned from"
           },
           "422": {
             "content": {
@@ -2186,7 +2211,7 @@
                 }
               }
             },
-            "description": "No Training run yet, or none from which a chance can be known"
+            "description": "No Training run yet, none from which a chance can be known, or a Mapping whose inputs are not the ones it learned from"
           },
           "422": {
             "content": {
@@ -2342,6 +2367,29 @@
           }
         },
         "summary": "Train Model"
+      }
+    },
+    "/data-sources": {
+      "get": {
+        "description": "The Data sources an advertiser's data can come from, with their labels.",
+        "operationId": "listDataSources",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DataSourceChoice"
+                  },
+                  "title": "Response Listdatasources",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Data Sources"
       }
     },
     "/health": {

@@ -87,7 +87,7 @@ def test_a_lead_is_scored_with_its_chance_lead_score_and_explanation(
     assert 0 < chance < 1
     assert body["typical_deal_size"] == 12000.0
     assert body["lead_score"] == pytest.approx(chance * 12000.0)
-    assert body["data_source"] == "hand_made_test"
+    assert body["data_source"] == "on hand-made test data"
     steps = body["explanation"]["steps"]
     assert [(s["input"], s["value"]) for s in steps] == [
         ("Enquiry Channel", "Phone"),
