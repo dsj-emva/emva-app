@@ -603,6 +603,14 @@ tr:has(select) > * {
   color: var(--color-muted);
 }
 
+.formatted .number {
+  padding-right: var(--space-4);
+}
+
+.formatted td.data {
+  white-space: nowrap;
+}
+
 .formatted caption {
   padding-bottom: var(--space-2);
   font-weight: 700;
