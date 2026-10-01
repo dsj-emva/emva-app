@@ -217,7 +217,7 @@ def confirm_mapping(
             lacking = _lacking_for_formatting(record)
             if lacking:
                 raise _never_formatted(lacking)
-            _format(advertiser, confirmed, store, session, confirmed_before=True)
+            _format(advertiser, confirmed, store, session, clock.now(), confirmed_before=True)
             _commit(session)
         elif not _raw_uploads(advertiser):
             raise HTTPException(status.HTTP_409_CONFLICT, "The mapping is already confirmed.")
@@ -234,7 +234,7 @@ def confirm_mapping(
             f"The mapping cannot be confirmed yet: {' '.join(refused.problems)}",
         ) from refused
     assert record is not None, "an empty draft is never confirmable"
-    _format(advertiser, confirmed, store, session, confirmed_before=False)
+    _format(advertiser, confirmed, store, session, clock.now(), confirmed_before=False)
     record.content = confirmed.mapping.model_dump(mode="json")
     record.confirmed_at = confirmed.confirmed_at
     record.confirmed_against = shape.model_dump(mode="json")
@@ -248,9 +248,12 @@ def _format(
     confirmed: ConfirmedMapping,
     store: ObjectStore,
     session: Session,
+    at: datetime,
     *,
     confirmed_before: bool,
 ) -> None:
+    """Format both files with the confirmed mapping, recording them as formatted at the given
+    time; the caller commits."""
     tables = []
     for kind in (FileKind.LEADS, FileKind.STAGE_HISTORY):
         file = uploaded_file(advertiser, kind)
@@ -261,9 +264,7 @@ def _format(
             tables.append(read_stored(file, store))
         except HTTPException as error:
             raise _never_formatted(f"the raw {label(kind)} can no longer be read") from error
-    records.keep_formatted(
-        session, advertiser, format_files(*tables, confirmed), confirmed.confirmed_at
-    )
+    records.keep_formatted(session, advertiser, format_files(*tables, confirmed), at)
 
 
 def _lacking_for_formatting(record: records.AdvertiserMapping) -> str | None:

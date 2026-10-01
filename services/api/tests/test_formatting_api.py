@@ -263,6 +263,18 @@ def test_confirming_an_old_confirmed_mapping_again_formats_it_while_its_raw_file
     assert raw_files(bucket, advertiser) == []
 
 
+def test_formatting_on_confirming_again_is_dated_by_the_clock_not_by_the_confirmation(
+    client: TestClient, settings: Settings, clock: FixedClock
+):
+    advertiser = confirmed_without_formatting(client, settings, HAND_MADE_MAPPING)
+    clock.set(datetime(2026, 9, 14, 11, 30, tzinfo=UTC))
+
+    again = confirm(client, advertiser).json()
+
+    assert again["confirmed_at"] == "2026-09-01T10:00:00Z"
+    assert again["formatted_at"] == "2026-09-14T11:30:00Z"
+
+
 def test_an_old_confirmed_mapping_whose_raw_file_is_gone_says_to_start_a_new_advertiser(
     client: TestClient, settings: Settings, bucket
 ):
