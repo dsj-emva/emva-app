@@ -15,9 +15,12 @@ What it holds, for the slices that use it (a planned-hospitality advertiser's CR
 - Bigger budgets, Safari and Honeymoon trips, and Phone or Partner agent enquiries win more.
 """
 
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+
+from emva_api.clock import FixedClock
 
 HAND_MADE = Path(__file__).parent / "hand_made"
 
@@ -69,11 +72,11 @@ def test_both_hand_made_files_show_their_row_counts_and_columns(client: TestClie
 def test_the_hand_made_stage_history_uses_the_crms_own_stage_names(client: TestClient):
     advertiser = upload_hand_made(client)
 
-    stages = client.get(
-        f"/advertisers/{advertiser}/files/stage-history/crm-stages", params={"column": "Stage"}
+    review = client.put(
+        f"/advertisers/{advertiser}/mapping", json={"stage_history": {"crm_stage": "Stage"}}
     ).json()
 
-    assert stages == [
+    assert review["crm_stages"] == [
         {"name": "New enquiry", "row_count": 98},
         {"name": "Call attempted", "row_count": 82},
         {"name": "Discovery call", "row_count": 67},
@@ -85,3 +88,55 @@ def test_the_hand_made_stage_history_uses_the_crms_own_stage_names(client: TestC
         {"name": "Itinerary revised", "row_count": 3},
         {"name": "Closed Lost", "row_count": 2},
     ]
+
+
+HAND_MADE_MAPPING = {
+    "leads": {
+        "lead_id": "Lead ID",
+        "submitted_at": "Created Date",
+        "name": "Full Name",
+        "email": "Email",
+        "phone": "Phone",
+        "inputs": {
+            "Enquiry Channel": "category",
+            "Trip Type": "category",
+            "Party Size": "number",
+            "Nights": "number",
+            "Budget (GBP)": "number",
+        },
+    },
+    "stage_history": {
+        "lead_id": "Lead ID",
+        "crm_stage": "Stage",
+        "changed_at": "Changed At",
+        "deal_value": "Deal Value",
+    },
+    "crm_stages": {
+        "New enquiry": "submitted",
+        "Call attempted": "contact_attempted",
+        "Left voicemail": "contact_attempted",
+        "Discovery call": "engaged",
+        "Brief agreed": "qualified",
+        "Quote sent": "proposal",
+        "Itinerary revised": "proposal",
+        "Closed won": "won",
+        "Closed lost": "lost",
+        "Closed Lost": "lost",
+    },
+    "typical_deal_size": 12000.0,
+}
+
+
+def test_every_column_and_crm_stage_of_the_hand_made_files_can_be_mapped_and_confirmed(
+    client: TestClient, clock: FixedClock
+):
+    advertiser = upload_hand_made(client)
+    saved = client.put(f"/advertisers/{advertiser}/mapping", json=HAND_MADE_MAPPING).json()
+    assert saved["problems"] == []
+    clock.set(datetime(2026, 9, 14, 11, 5, tzinfo=UTC))
+
+    confirmed = client.post(f"/advertisers/{advertiser}/mapping/confirmation")
+
+    assert confirmed.status_code == 200, confirmed.text
+    assert confirmed.json()["confirmed_at"] == "2026-09-14T11:05:00Z"
+    assert confirmed.json()["mapping"] == HAND_MADE_MAPPING

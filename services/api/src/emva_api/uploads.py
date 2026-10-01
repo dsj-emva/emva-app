@@ -5,19 +5,28 @@ work in its threadpool; only reading the request body runs on the event loop.
 """
 
 import uuid
-from collections.abc import Iterator
 from datetime import UTC, datetime
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from sqlalchemy.orm import Session
 
 from emva_api import records
-from emva_api.clock import Clock
-from emva_api.csv_file import Table, UnreadableFile, count_values, profile, read_csv
-from emva_api.object_store import ObjectStore
+from emva_api.csv_file import UnreadableFile, profile, read_csv
+from emva_api.dependencies import (
+    NOT_FOUND,
+    UNREADABLE_STORED_FILE,
+    ClockDep,
+    Problem,
+    SessionDep,
+    StoreDep,
+    find_advertiser,
+    find_file,
+    label,
+    read_stored,
+    uploaded_file,
+)
 from emva_api.records import DataSource, FileKind
 
 router = APIRouter()
@@ -55,28 +64,6 @@ class Advertiser(BaseModel):
     review_available: bool = Field(description="True once both files are uploaded")
 
 
-class CrmStage(BaseModel):
-    name: str
-    row_count: int
-
-
-class Problem(BaseModel):
-    detail: str
-
-
-def _session(request: Request) -> Iterator[Session]:
-    with request.app.state.sessions() as session:
-        yield session
-
-
-def _store(request: Request) -> ObjectStore:
-    return request.app.state.store
-
-
-def _clock(request: Request) -> Clock:
-    return request.app.state.clock
-
-
 async def _csv_body(request: Request) -> bytes:
     """The request body, refused as soon as it is known to be over the limit."""
     too_large = HTTPException(
@@ -96,15 +83,6 @@ async def _csv_body(request: Request) -> bytes:
     return b"".join(chunks)
 
 
-SessionDep = Annotated[Session, Depends(_session)]
-StoreDep = Annotated[ObjectStore, Depends(_store)]
-ClockDep = Annotated[Clock, Depends(_clock)]
-NOT_FOUND = {status.HTTP_404_NOT_FOUND: {"model": Problem}}
-UNREADABLE_STORED_FILE = {
-    status.HTTP_409_CONFLICT: {"model": Problem, "description": "Stored file unreadable"}
-}
-
-
 @router.post(
     "/advertisers",
     operation_id="createAdvertiser",
@@ -121,7 +99,7 @@ def create_advertiser(new: NewAdvertiser, session: SessionDep, clock: ClockDep) 
 
 @router.get("/advertisers/{advertiser_id}", operation_id="getAdvertiser", responses=NOT_FOUND)
 def get_advertiser(advertiser_id: uuid.UUID, session: SessionDep) -> Advertiser:
-    return _describe(_find_advertiser(session, advertiser_id))
+    return _describe(find_advertiser(session, advertiser_id))
 
 
 @router.put(
@@ -130,7 +108,10 @@ def get_advertiser(advertiser_id: uuid.UUID, session: SessionDep) -> Advertiser:
     responses={
         **NOT_FOUND,
         status.HTTP_400_BAD_REQUEST: {"model": Problem, "description": "Not a readable CSV file"},
-        status.HTTP_409_CONFLICT: {"model": Problem, "description": "Another upload won"},
+        status.HTTP_409_CONFLICT: {
+            "model": Problem,
+            "description": "Another upload won, or the mapping is confirmed",
+        },
         status.HTTP_413_CONTENT_TOO_LARGE: {"model": Problem, "description": "Over 20 MB"},
         status.HTTP_503_SERVICE_UNAVAILABLE: {"model": Problem, "description": "Not saved"},
     },
@@ -151,7 +132,12 @@ def upload_file(
     clock: ClockDep,
 ) -> FileProfile:
     """Upload the file, replacing any earlier upload of the same kind."""
-    advertiser = _find_advertiser(session, advertiser_id)
+    advertiser = find_advertiser(session, advertiser_id)
+    if advertiser.mapping is not None and advertiser.mapping.confirmed_at is not None:
+        raise HTTPException(
+            status.HTTP_409_CONFLICT,
+            "The mapping is confirmed, so the files can no longer be replaced.",
+        )
     try:
         table = read_csv(content)
     except UnreadableFile as error:
@@ -159,7 +145,7 @@ def upload_file(
 
     object_key = f"advertisers/{advertiser.id}/{kind.value}/{uuid.uuid4()}.csv"
     store.put(object_key, content)
-    file = _find_file(advertiser, kind)
+    file = find_file(advertiser, kind)
     earlier_key = file.object_key if file else None
     if file is None:
         file = records.UploadedFile(advertiser=advertiser, kind=kind)
@@ -177,12 +163,12 @@ def upload_file(
         if isinstance(error, IntegrityError):
             raise HTTPException(
                 status.HTTP_409_CONFLICT,
-                f"Another upload of the {_label(kind)} finished first. "
+                f"Another upload of the {label(kind)} finished first. "
                 "Upload it again to replace it.",
             ) from error
         raise HTTPException(
             status.HTTP_503_SERVICE_UNAVAILABLE,
-            f"The {_label(kind)} could not be saved. Try again.",
+            f"The {label(kind)} could not be saved. Try again.",
         ) from error
     if earlier_key is not None:
         store.delete(earlier_key)
@@ -198,68 +184,14 @@ def get_columns(
     advertiser_id: uuid.UUID, kind: FileKind, session: SessionDep, store: StoreDep
 ) -> list[Column]:
     """Each column of the file with its first few values, read from the file itself."""
-    table = _read_stored(_uploaded_file(session, advertiser_id, kind), store)
+    file = uploaded_file(find_advertiser(session, advertiser_id), kind)
+    table = read_stored(file, store)
     return [Column(name=column.name, examples=column.examples) for column in profile(table)]
 
 
-@router.get(
-    "/advertisers/{advertiser_id}/files/stage-history/crm-stages",
-    operation_id="getCrmStages",
-    responses={
-        **NOT_FOUND,
-        **UNREADABLE_STORED_FILE,
-        status.HTTP_400_BAD_REQUEST: {"model": Problem, "description": "No such column"},
-    },
-)
-def get_crm_stages(
-    advertiser_id: uuid.UUID,
-    column: Annotated[str, Query(description="The stage-history column holding the CRM stage")],
-    session: SessionDep,
-    store: StoreDep,
-) -> list[CrmStage]:
-    """Every distinct CRM stage name in the column, with how many rows use it."""
-    file = _uploaded_file(session, advertiser_id, FileKind.STAGE_HISTORY)
-    table = _read_stored(file, store)
-    if column not in table.columns:
-        raise HTTPException(
-            status.HTTP_400_BAD_REQUEST, f"The stage-history file has no column {column!r}."
-        )
-    return [CrmStage(name=name, row_count=count) for name, count in count_values(table, column)]
-
-
-def _find_advertiser(session: Session, advertiser_id: uuid.UUID) -> records.Advertiser:
-    advertiser = session.get(records.Advertiser, advertiser_id)
-    if advertiser is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, "No such advertiser.")
-    return advertiser
-
-
-def _find_file(advertiser: records.Advertiser, kind: FileKind) -> records.UploadedFile | None:
-    return next((file for file in advertiser.files if file.kind == kind), None)
-
-
-def _uploaded_file(
-    session: Session, advertiser_id: uuid.UUID, kind: FileKind
-) -> records.UploadedFile:
-    file = _find_file(_find_advertiser(session, advertiser_id), kind)
-    if file is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, f"The {_label(kind)} is not uploaded.")
-    return file
-
-
-def _read_stored(file: records.UploadedFile, store: ObjectStore) -> Table:
-    try:
-        return read_csv(store.get(file.object_key))
-    except UnreadableFile as error:
-        raise HTTPException(
-            status.HTTP_409_CONFLICT,
-            f"The stored {_label(file.kind)} can no longer be read. Upload it again.",
-        ) from error
-
-
 def _describe(advertiser: records.Advertiser) -> Advertiser:
-    leads_file = _find_file(advertiser, FileKind.LEADS)
-    stage_history_file = _find_file(advertiser, FileKind.STAGE_HISTORY)
+    leads_file = find_file(advertiser, FileKind.LEADS)
+    stage_history_file = find_file(advertiser, FileKind.STAGE_HISTORY)
     return Advertiser(
         id=advertiser.id,
         name=advertiser.name,
@@ -278,7 +210,3 @@ def _profile(file: records.UploadedFile) -> FileProfile:
         row_count=file.row_count,
         column_names=file.column_names,
     )
-
-
-def _label(kind: FileKind) -> str:
-    return {FileKind.LEADS: "leads file", FileKind.STAGE_HISTORY: "stage-history file"}[kind]

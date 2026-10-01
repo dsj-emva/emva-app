@@ -33,26 +33,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/advertisers/{advertiser_id}/files/stage-history/crm-stages": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Get Crm Stages
-         * @description Every distinct CRM stage name in the column, with how many rows use it.
-         */
-        get: operations["getCrmStages"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/advertisers/{advertiser_id}/files/{kind}": {
         parameters: {
             query?: never;
@@ -87,6 +67,50 @@ export interface paths {
         get: operations["getColumns"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/advertisers/{advertiser_id}/mapping": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Mapping
+         * @description The mapping as last saved (an empty draft at first), with what stops it being confirmed.
+         */
+        get: operations["getMapping"];
+        /**
+         * Save Mapping
+         * @description Keep the draft as it stands; refused once the mapping is confirmed.
+         */
+        put: operations["saveMapping"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/advertisers/{advertiser_id}/mapping/confirmation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Confirm Mapping
+         * @description Confirm the saved draft, recording when; refused while it has problems.
+         */
+        post: operations["confirmMapping"];
         delete?: never;
         options?: never;
         head?: never;
@@ -142,6 +166,12 @@ export interface components {
             /** Name */
             name: string;
         };
+        /**
+         * ColumnKind
+         * @description How an input column is read: as a number, or as one of a set of categories.
+         * @enum {string}
+         */
+        ColumnKind: "number" | "category";
         /** CrmStage */
         CrmStage: {
             /** Name */
@@ -188,16 +218,127 @@ export interface components {
              */
             status: "ok";
         };
+        /** LadderPlace */
+        LadderPlace: {
+            /** Name */
+            name: string;
+            place: components["schemas"]["Place"];
+        };
+        /**
+         * LeadsColumns
+         * @description Which leads-file column holds what. Every column not marked here is dropped.
+         */
+        LeadsColumns: {
+            /**
+             * Email
+             * @description The lead's email, to be scrambled
+             */
+            email?: string | null;
+            /**
+             * Inputs
+             * @description The inputs to the score, each read as its kind
+             */
+            inputs?: {
+                [key: string]: components["schemas"]["ColumnKind"];
+            };
+            /** Lead Id */
+            lead_id?: string | null;
+            /**
+             * Name
+             * @description The lead's name, to be removed
+             */
+            name?: string | null;
+            /**
+             * Phone
+             * @description The lead's phone, to be scrambled
+             */
+            phone?: string | null;
+            /**
+             * Submitted At
+             * @description When the lead was submitted
+             */
+            submitted_at?: string | null;
+        };
+        /**
+         * Lost
+         * @enum {string}
+         */
+        Lost: "lost";
+        /** Mapping */
+        Mapping: {
+            /**
+             * Crm Stages
+             * @description Where each CRM stage name sits: a Stage, or Lost
+             */
+            crm_stages?: {
+                [key: string]: components["schemas"]["Place"];
+            };
+            /**
+             * @default {
+             *       "inputs": {}
+             *     }
+             */
+            leads: components["schemas"]["LeadsColumns"];
+            /** @default {} */
+            stage_history: components["schemas"]["StageHistoryColumns"];
+            /** Typical Deal Size */
+            typical_deal_size?: number | null;
+        };
+        /** MappingReview */
+        MappingReview: {
+            /**
+             * Confirmed At
+             * @description When a person confirmed it; null in draft
+             */
+            confirmed_at: string | null;
+            /**
+             * Crm Stages
+             * @description Every CRM stage name in the column marked as the CRM stage, most used first
+             */
+            crm_stages: components["schemas"]["CrmStage"][];
+            mapping: components["schemas"]["Mapping"];
+            /**
+             * Places
+             * @description Where a CRM stage can be placed: the Canonical ladder in order, then Lost
+             */
+            places: components["schemas"]["LadderPlace"][];
+            /**
+             * Problems
+             * @description Why it cannot be confirmed yet; empty once it can
+             */
+            problems: string[];
+        };
         /** NewAdvertiser */
         NewAdvertiser: {
             data_source: components["schemas"]["DataSource"];
             /** Name */
             name: string;
         };
+        Place: components["schemas"]["Stage"] | components["schemas"]["Lost"];
         /** Problem */
         Problem: {
             /** Detail */
             detail: string;
+        };
+        /**
+         * Stage
+         * @description A Stage of the Canonical ladder; members are in ladder order.
+         * @enum {string}
+         */
+        Stage: "submitted" | "contact_attempted" | "engaged" | "qualified" | "proposal" | "won";
+        /** StageHistoryColumns */
+        StageHistoryColumns: {
+            /**
+             * Changed At
+             * @description When the change of CRM stage happened
+             */
+            changed_at?: string | null;
+            /** Crm Stage */
+            crm_stage?: string | null;
+            /** Deal Value */
+            deal_value?: string | null;
+            /** Lead Id */
+            lead_id?: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -294,67 +435,6 @@ export interface operations {
             };
         };
     };
-    getCrmStages: {
-        parameters: {
-            query: {
-                /** @description The stage-history column holding the CRM stage */
-                column: string;
-            };
-            header?: never;
-            path: {
-                advertiser_id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CrmStage"][];
-                };
-            };
-            /** @description No such column */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Not Found */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Stored file unreadable */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["Problem"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     uploadFile: {
         parameters: {
             query: {
@@ -400,7 +480,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Another upload won */
+            /** @description Another upload won, or the mapping is confirmed */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -469,6 +549,157 @@ export interface operations {
                 };
             };
             /** @description Stored file unreadable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    getMapping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                advertiser_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MappingReview"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Stored file unreadable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    saveMapping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                advertiser_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["Mapping"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MappingReview"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Already confirmed, or a stored file is unreadable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    confirmMapping: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                advertiser_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MappingReview"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Not confirmable yet, already confirmed, or a stored file unreadable */
             409: {
                 headers: {
                     [name: string]: unknown;
