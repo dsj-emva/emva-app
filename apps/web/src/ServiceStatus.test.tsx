@@ -2,17 +2,17 @@ import { createApiClient } from '@emva/api-client'
 import { render, screen } from '@testing-library/react'
 import { describe, expect, it } from 'vitest'
 
-import { HealthPage } from './HealthPage.tsx'
+import { ServiceStatus } from './ServiceStatus.tsx'
 
 function clientAnswering(respond: () => Promise<Response>) {
   return createApiClient({ baseUrl: 'http://api.test', fetch: respond })
 }
 
-describe('HealthPage', () => {
+describe('ServiceStatus', () => {
   it('shows the status the service reports', async () => {
     const client = clientAnswering(async () => Response.json({ status: 'ok' }))
 
-    render(<HealthPage client={client} />)
+    render(<ServiceStatus client={client} />)
 
     expect(await screen.findByText('Service status: ok')).toBeInTheDocument()
   })
@@ -20,7 +20,7 @@ describe('HealthPage', () => {
   it('says the service answered with an error when it replies with one', async () => {
     const client = clientAnswering(async () => new Response('boom', { status: 500 }))
 
-    render(<HealthPage client={client} />)
+    render(<ServiceStatus client={client} />)
 
     expect(await screen.findByText('Service answered with an error')).toBeInTheDocument()
   })
@@ -28,7 +28,7 @@ describe('HealthPage', () => {
   it.each([502, 503, 504])('says the service is unreachable when a proxy answers %i for it', async (status) => {
     const client = clientAnswering(async () => new Response('Bad Gateway', { status }))
 
-    render(<HealthPage client={client} />)
+    render(<ServiceStatus client={client} />)
 
     expect(await screen.findByText('Service unreachable')).toBeInTheDocument()
   })
@@ -38,7 +38,7 @@ describe('HealthPage', () => {
       throw new TypeError('Failed to fetch')
     })
 
-    render(<HealthPage client={client} />)
+    render(<ServiceStatus client={client} />)
 
     expect(await screen.findByText('Service unreachable')).toBeInTheDocument()
   })
