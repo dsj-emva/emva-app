@@ -113,11 +113,11 @@
       },
       "FileProfile": {
         "properties": {
-          "columns": {
+          "column_names": {
             "items": {
-              "$ref": "#/components/schemas/Column"
+              "type": "string"
             },
-            "title": "Columns",
+            "title": "Column Names",
             "type": "array"
           },
           "file_name": {
@@ -142,7 +142,7 @@
           "file_name",
           "uploaded_at",
           "row_count",
-          "columns"
+          "column_names"
         ],
         "title": "FileProfile",
         "type": "object"
@@ -404,6 +404,16 @@
             },
             "description": "Not Found"
           },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stored file unreadable"
+          },
           "422": {
             "content": {
               "application/json": {
@@ -420,6 +430,7 @@
     },
     "/advertisers/{advertiser_id}/files/{kind}": {
       "put": {
+        "description": "Upload the file, replacing any earlier upload of the same kind.",
         "operationId": "uploadFile",
         "parameters": [
           {
@@ -502,7 +513,100 @@
                 }
               }
             },
-            "description": "Already uploaded"
+            "description": "Another upload won"
+          },
+          "413": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Over 20 MB"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not saved"
+          }
+        },
+        "summary": "Upload File"
+      }
+    },
+    "/advertisers/{advertiser_id}/files/{kind}/columns": {
+      "get": {
+        "description": "Each column of the file with its first few values, read from the file itself.",
+        "operationId": "getColumns",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "advertiser_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Advertiser Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "kind",
+            "required": true,
+            "schema": {
+              "$ref": "#/components/schemas/FileKind"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/Column"
+                  },
+                  "title": "Response Getcolumns",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Stored file unreadable"
           },
           "422": {
             "content": {
@@ -515,7 +619,7 @@
             "description": "Validation Error"
           }
         },
-        "summary": "Upload File"
+        "summary": "Get Columns"
       }
     },
     "/health": {

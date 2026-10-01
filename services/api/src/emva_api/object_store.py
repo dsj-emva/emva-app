@@ -28,3 +28,6 @@ class ObjectStore:
 
     def get(self, key: str) -> bytes:
         return self._s3.get_object(Bucket=self._bucket, Key=key)["Body"].read()
+
+    def delete(self, key: str) -> None:
+        self._s3.delete_object(Bucket=self._bucket, Key=key)

@@ -4,7 +4,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, Enum, ForeignKey, String, UniqueConstraint
+from sqlalchemy import JSON, DateTime, Enum, ForeignKey, String, UniqueConstraint
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
 
@@ -43,7 +43,11 @@ class Advertiser(Base):
 
 
 class UploadedFile(Base):
-    """A raw file as uploaded; its content lives in object storage under object_key."""
+    """A raw file as uploaded; its content lives in object storage under object_key.
+
+    Only the file's shape is kept here (row count, column names); its values, which hold
+    personal data, are read from object storage and never stored in Postgres.
+    """
 
     __tablename__ = "uploaded_file"
     __table_args__ = (UniqueConstraint("advertiser_id", "kind"),)
@@ -56,4 +60,6 @@ class UploadedFile(Base):
     file_name: Mapped[str] = mapped_column(String(255))
     object_key: Mapped[str] = mapped_column(String(255))
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    row_count: Mapped[int]
+    column_names: Mapped[list[str]] = mapped_column(JSON)
     advertiser: Mapped[Advertiser] = relationship(back_populates="files")

@@ -36,6 +36,8 @@ def upgrade() -> None:
         sa.Column("file_name", sa.String(length=255), nullable=False),
         sa.Column("object_key", sa.String(length=255), nullable=False),
         sa.Column("uploaded_at", sa.DateTime(timezone=True), nullable=False),
+        sa.Column("row_count", sa.Integer(), nullable=False),
+        sa.Column("column_names", sa.JSON(), nullable=False),
         sa.ForeignKeyConstraint(
             ["advertiser_id"],
             ["advertiser.id"],

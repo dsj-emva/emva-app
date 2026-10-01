@@ -5,10 +5,11 @@ import os
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, select, text
 from sqlalchemy.orm import Session
 
 from emva_api import records
+from emva_api.object_store import ObjectStore
 from emva_api.settings import Settings
 
 LEADS = b"Lead ID,Budget (GBP)\nL1,8000\nL2,12000\n"
@@ -43,6 +44,37 @@ def test_the_raw_file_is_in_object_storage_and_its_record_in_postgres(
     stored = bucket.Object(file.object_key).get()
     assert file.file_name == "leads.csv"
     assert stored["Body"].read() == LEADS
+
+
+def test_postgres_keeps_the_files_shape_but_none_of_its_values(
+    client: TestClient, settings: Settings
+):
+    advertiser = upload_leads(client, b"Lead ID,Email\nL-4242,ada@example.com\n")
+
+    with create_engine(settings.database_url).connect() as connection:
+        record = connection.execute(
+            text("SELECT row_to_json(f)::text FROM uploaded_file f WHERE advertiser_id = :id"),
+            {"id": advertiser},
+        ).scalar_one()
+    assert '"row_count":1' in record
+    assert '"column_names":["Lead ID", "Email"]' in record
+    assert "L-4242" not in record
+    assert "ada@example.com" not in record
+
+
+def test_the_advertiser_is_described_without_reading_its_files(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    advertiser = upload_leads(client, LEADS)
+
+    def refuse(store, key: str) -> bytes:
+        raise AssertionError(f"read {key}")
+
+    monkeypatch.setattr(ObjectStore, "get", refuse)
+    response = client.get(f"/advertisers/{advertiser}")
+
+    assert response.status_code == 200
+    assert response.json()["leads_file"]["row_count"] == 2
 
 
 def test_uploading_a_large_file_writes_nothing_to_local_disk(

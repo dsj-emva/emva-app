@@ -61,8 +61,31 @@ export interface paths {
             cookie?: never;
         };
         get?: never;
-        /** Upload File */
+        /**
+         * Upload File
+         * @description Upload the file, replacing any earlier upload of the same kind.
+         */
         put: operations["uploadFile"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/advertisers/{advertiser_id}/files/{kind}/columns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Columns
+         * @description Each column of the file with its first few values, read from the file itself.
+         */
+        get: operations["getColumns"];
+        put?: never;
         post?: never;
         delete?: never;
         options?: never;
@@ -139,8 +162,8 @@ export interface components {
         FileKind: "leads" | "stage-history";
         /** FileProfile */
         FileProfile: {
-            /** Columns */
-            columns: components["schemas"]["Column"][];
+            /** Column Names */
+            column_names: string[];
             /** File Name */
             file_name: string;
             kind: components["schemas"]["FileKind"];
@@ -312,6 +335,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description Stored file unreadable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -368,7 +400,75 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Already uploaded */
+            /** @description Another upload won */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Over 20 MB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Not saved */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getColumns: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                advertiser_id: string;
+                kind: components["schemas"]["FileKind"];
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Column"][];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Stored file unreadable */
             409: {
                 headers: {
                     [name: string]: unknown;

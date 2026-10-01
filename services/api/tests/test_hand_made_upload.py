@@ -38,12 +38,15 @@ def upload_hand_made(client: TestClient) -> str:
 
 
 def test_both_hand_made_files_show_their_row_counts_and_columns(client: TestClient):
-    advertiser = client.get(f"/advertisers/{upload_hand_made(client)}").json()
+    advertiser_id = upload_hand_made(client)
+    advertiser = client.get(f"/advertisers/{advertiser_id}").json()
+    leads_columns = client.get(f"/advertisers/{advertiser_id}/files/leads/columns").json()
+    history_columns = client.get(f"/advertisers/{advertiser_id}/files/stage-history/columns").json()
 
     leads, history = advertiser["leads_file"], advertiser["stage_history_file"]
     assert advertiser["review_available"] is True
     assert leads["row_count"] == 101
-    assert [column["name"] for column in leads["columns"]] == [
+    assert leads["column_names"] == [
         "Lead ID",
         "Created Date",
         "Full Name",
@@ -55,9 +58,9 @@ def test_both_hand_made_files_show_their_row_counts_and_columns(client: TestClie
         "Nights",
         "Budget (GBP)",
     ]
-    assert leads["columns"][6]["examples"] == ["Safari", "Family holiday", "Corporate retreat"]
+    assert leads_columns[6]["examples"] == ["Safari", "Family holiday", "Corporate retreat"]
     assert history["row_count"] == 418
-    assert history["columns"][1] == {
+    assert history_columns[1] == {
         "name": "Stage",
         "examples": ["New enquiry", "Call attempted", "Discovery call"],
     }
