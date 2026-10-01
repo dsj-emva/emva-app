@@ -377,13 +377,13 @@ describe('ReviewStep', () => {
     }
     renderReview(service.client, onChanged, partly)
 
-    const unfinished = await region('Confirming is not finished')
-    expect(unfinished.getByText(stillToDo)).toBeInTheDocument()
+    const notFinished = await region('Confirming is not finished')
+    expect(notFinished.getByText(stillToDo)).toBeInTheDocument()
     expect(screen.queryByText(/the raw files deleted/)).not.toBeInTheDocument()
     expect(service.sentTo(`GET ${ADVERTISER}/files/leads/columns`)).toHaveLength(0)
     expect(service.sentTo(`GET ${ADVERTISER}/files/stage-history/columns`)).toHaveLength(1)
 
-    fireEvent.click(unfinished.getByRole('button', { name: 'Finish confirming' }))
+    fireEvent.click(notFinished.getByRole('button', { name: 'Finish confirming' }))
 
     await waitFor(() =>
       expect(screen.queryByRole('region', { name: 'Confirming is not finished' })).toBeNull(),

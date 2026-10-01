@@ -8,8 +8,8 @@ What it holds, for the slices that use it (a planned-hospitality advertiser's CR
   is Engaged; Brief agreed is Qualified; Quote sent and Itinerary revised are Proposal; Closed won
   is Won (with its Deal value); Closed lost and Closed Lost are Lost.
 - From Contact attempted onwards each transition has at least 12 leads that made it and 12 that
-  failed it; some leads skip stages, some are unfinished at every stage, some were never
-  contacted (only New enquiry, or no rows at all) and two were lost before any contact.
+  failed it; some leads skip stages, some stop at every stage with no outcome yet, some are
+  Neglected leads (only New enquiry, or no rows at all) and two were lost before any contact.
 - Unreadable rows: one without a lead, one without a stage, one without a readable time, and one
   for a lead (L-9042) that is not in the leads file.
 - Bigger budgets, Safari and Honeymoon trips, and Phone or Partner agent enquiries win more.
