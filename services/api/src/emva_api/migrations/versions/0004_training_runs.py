@@ -19,13 +19,15 @@ def upgrade() -> None:
     op.create_table(
         "training_run",
         sa.Column("id", sa.Uuid(), nullable=False),
+        sa.Column("number", sa.BigInteger(), sa.Identity(always=True), nullable=False),
         sa.Column("advertiser_id", sa.Uuid(), nullable=False),
         sa.Column("trained_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("model_key", sa.String(length=255), nullable=False),
         sa.ForeignKeyConstraint(["advertiser_id"], ["advertiser.id"]),
         sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("number"),
     )
-    op.create_index("training_run_advertiser_id", "training_run", ["advertiser_id", "trained_at"])
+    op.create_index("training_run_advertiser_id", "training_run", ["advertiser_id", "number"])
 
 
 def downgrade() -> None:

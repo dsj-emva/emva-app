@@ -757,6 +757,50 @@
         "title": "Summary",
         "type": "object"
       },
+      "Training": {
+        "properties": {
+          "latest": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/TrainingRunView"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The latest Training run; null before one"
+          },
+          "not_trainable_because": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why not, while it cannot train",
+            "title": "Not Trainable Because"
+          },
+          "rule": {
+            "description": "When a Transition's model is learned",
+            "title": "Rule",
+            "type": "string"
+          },
+          "trainable": {
+            "title": "Trainable",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "trainable",
+          "not_trainable_because",
+          "rule",
+          "latest"
+        ],
+        "title": "Training",
+        "type": "object"
+      },
       "TrainingRunView": {
         "properties": {
           "id": {
@@ -786,6 +830,29 @@
         "title": "TrainingRunView",
         "type": "object"
       },
+      "Transition": {
+        "description": "A lead moving from one Stage to the next.",
+        "properties": {
+          "from_stage": {
+            "$ref": "#/components/schemas/Stage"
+          },
+          "name": {
+            "readOnly": true,
+            "title": "Name",
+            "type": "string"
+          },
+          "to_stage": {
+            "$ref": "#/components/schemas/Stage"
+          }
+        },
+        "required": [
+          "from_stage",
+          "to_stage",
+          "name"
+        ],
+        "title": "Transition",
+        "type": "object"
+      },
       "TransitionResult": {
         "properties": {
           "failed": {
@@ -793,12 +860,9 @@
             "title": "Failed",
             "type": "integer"
           },
-          "from_stage": {
-            "$ref": "#/components/schemas/Stage"
-          },
-          "learned": {
-            "description": "False when too few to learn: fewer than 10 made or failed",
-            "title": "Learned",
+          "fitted": {
+            "description": "Whether its logistic regression was fitted",
+            "title": "Fitted",
             "type": "boolean"
           },
           "made": {
@@ -806,11 +870,7 @@
             "title": "Made",
             "type": "integer"
           },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "observed_rate": {
+          "smoothed_rate": {
             "anyOf": [
               {
                 "type": "number"
@@ -819,27 +879,31 @@
                 "type": "null"
               }
             ],
-            "description": "made / (made + failed), the chance used when too few to learn; null when no lead has made or failed it yet",
-            "title": "Observed Rate"
+            "description": "(made + 2p) / (made + failed + 2), p pooled across the run's Transitions: every lead's chance when too few to learn. Null only when no lead finished any.",
+            "title": "Smoothed Rate"
           },
-          "to_stage": {
-            "$ref": "#/components/schemas/Stage"
+          "transition": {
+            "$ref": "#/components/schemas/Transition"
           },
           "unfinished": {
             "description": "Leads that faced it but neither made nor failed it yet; left out",
             "title": "Unfinished",
             "type": "integer"
+          },
+          "verdict": {
+            "description": "What to say of it: learned, or too few to learn",
+            "title": "Verdict",
+            "type": "string"
           }
         },
         "required": [
-          "from_stage",
-          "to_stage",
-          "name",
+          "transition",
           "made",
           "failed",
           "unfinished",
-          "learned",
-          "observed_rate"
+          "fitted",
+          "verdict",
+          "smoothed_rate"
         ],
         "title": "TransitionResult",
         "type": "object"
@@ -1417,6 +1481,67 @@
         "summary": "Confirm Mapping"
       }
     },
+    "/advertisers/{advertiser_id}/training": {
+      "get": {
+        "description": "Whether training can run now, and the latest Training run.",
+        "operationId": "getTraining",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "advertiser_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Advertiser Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Training"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Service Unavailable"
+          }
+        },
+        "summary": "Get Training"
+      }
+    },
     "/advertisers/{advertiser_id}/training-runs": {
       "post": {
         "description": "Train on every formatted lead and stage event as of now, and keep the Training run.",
@@ -1438,7 +1563,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TrainingRunView"
+                  "$ref": "#/components/schemas/Training"
                 }
               }
             },
@@ -1482,60 +1607,10 @@
                 }
               }
             },
-            "description": "The Training run could not be kept"
+            "description": "Service Unavailable"
           }
         },
         "summary": "Train Model"
-      }
-    },
-    "/advertisers/{advertiser_id}/training-runs/latest": {
-      "get": {
-        "operationId": "getLatestTrainingRun",
-        "parameters": [
-          {
-            "in": "path",
-            "name": "advertiser_id",
-            "required": true,
-            "schema": {
-              "format": "uuid",
-              "title": "Advertiser Id",
-              "type": "string"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/TrainingRunView"
-                }
-              }
-            },
-            "description": "Successful Response"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/Problem"
-                }
-              }
-            },
-            "description": "No such advertiser, or not trained yet"
-          },
-          "422": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            },
-            "description": "Validation Error"
-          }
-        },
-        "summary": "Latest Training Run"
       }
     },
     "/health": {

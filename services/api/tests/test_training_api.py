@@ -7,6 +7,7 @@ from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import pytest
+from botocore.exceptions import EndpointConnectionError
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
@@ -16,54 +17,58 @@ from test_hand_made_upload import HAND_MADE_MAPPING, upload_hand_made
 
 from emva_api.clock import FixedClock
 from emva_api.main import create_app
+from emva_api.object_store import ObjectStore
 from emva_api.settings import Settings
 
+# Pooled over the four Transitions: 169 made of 225 finished.
+POOLED = 169 / 225
+
+
+def transition(from_stage, to_stage, name, made, failed, unfinished):
+    return {
+        "transition": {"from_stage": from_stage, "to_stage": to_stage, "name": name},
+        "made": made,
+        "failed": failed,
+        "unfinished": unfinished,
+        "fitted": True,
+        "verdict": "Learned",
+        "smoothed_rate": pytest.approx((made + 2 * POOLED) / (made + failed + 2)),
+    }
+
+
 HAND_MADE_TRANSITIONS = [
-    {
-        "from_stage": "contact_attempted",
-        "to_stage": "engaged",
-        "name": "Contact attempted → Engaged",
-        "made": 67,
-        "failed": 16,
-        "unfinished": 4,
-        "learned": True,
-        "observed_rate": pytest.approx(67 / 83),
-    },
-    {
-        "from_stage": "engaged",
-        "to_stage": "qualified",
-        "name": "Engaged → Qualified",
-        "made": 49,
-        "failed": 15,
-        "unfinished": 3,
-        "learned": True,
-        "observed_rate": pytest.approx(49 / 64),
-    },
-    {
-        "from_stage": "qualified",
-        "to_stage": "proposal",
-        "name": "Qualified → Proposal",
-        "made": 35,
-        "failed": 12,
-        "unfinished": 2,
-        "learned": True,
-        "observed_rate": pytest.approx(35 / 47),
-    },
-    {
-        "from_stage": "proposal",
-        "to_stage": "won",
-        "name": "Proposal → Won",
-        "made": 18,
-        "failed": 13,
-        "unfinished": 4,
-        "learned": True,
-        "observed_rate": pytest.approx(18 / 31),
-    },
+    transition("contact_attempted", "engaged", "Contact attempted → Engaged", 67, 16, 4),
+    transition("engaged", "qualified", "Engaged → Qualified", 49, 15, 3),
+    transition("qualified", "proposal", "Qualified → Proposal", 35, 12, 2),
+    transition("proposal", "won", "Proposal → Won", 18, 13, 4),
 ]
+
+RULE = (
+    "A transition's model is learned only from at least 10 leads that made it and 10 that "
+    "failed it. With fewer it is too few to learn, and every lead gets its smoothed rate: its "
+    "own rate pulled towards the rate across all four transitions."
+)
 
 
 def train(client: TestClient, advertiser: str):
     return client.post(f"/advertisers/{advertiser}/training-runs")
+
+
+def training(client: TestClient, advertiser: str):
+    return client.get(f"/advertisers/{advertiser}/training")
+
+
+def refused_with(client: TestClient, advertiser: str, reason: str) -> None:
+    """Training is refused with the reason, and the screen is told the same."""
+    refused = train(client, advertiser)
+    assert refused.status_code == 409
+    assert refused.json()["detail"] == reason
+    assert training(client, advertiser).json() == {
+        "trainable": False,
+        "not_trainable_because": reason,
+        "rule": RULE,
+        "latest": None,
+    }
 
 
 @pytest.fixture
@@ -87,11 +92,10 @@ def test_training_is_refused_before_the_mapping_is_confirmed_and_nothing_is_stor
     draft = map_hand_made(own_client)
 
     for advertiser in (no_mapping, draft):
-        refused = train(own_client, advertiser)
-
-        assert refused.status_code == 409
-        assert refused.json()["detail"] == (
-            "The mapping is not confirmed yet. Nothing trains before a person confirms it."
+        refused_with(
+            own_client,
+            advertiser,
+            "The mapping is not confirmed yet. Nothing trains before a person confirms it.",
         )
     assert training_runs_stored(own_settings, own_bucket) == (0, [])
 
@@ -101,11 +105,10 @@ def test_training_is_refused_when_the_mapping_is_confirmed_but_its_data_not_form
 ):
     advertiser = confirmed_without_formatting(own_client, own_settings, HAND_MADE_MAPPING)
 
-    refused = train(own_client, advertiser)
-
-    assert refused.status_code == 409
-    assert refused.json()["detail"] == (
-        "The mapping is confirmed but its data is not formatted yet. Confirm again to format it."
+    refused_with(
+        own_client,
+        advertiser,
+        "The mapping is confirmed but its data is not formatted yet. Confirm again to format it.",
     )
     assert training_runs_stored(own_settings, own_bucket) == (0, [])
 
@@ -115,11 +118,10 @@ def test_training_is_refused_when_the_mapping_marks_no_input_to_the_score(client
     advertiser = map_hand_made(client, no_inputs)
     confirm(client, advertiser)
 
-    refused = train(client, advertiser)
-
-    assert refused.status_code == 409
-    assert refused.json()["detail"] == (
-        "The mapping marks no input to the score, so there is nothing to learn from."
+    refused_with(
+        client,
+        advertiser,
+        "The mapping marks no input to the score, so there is nothing to learn from.",
     )
 
 
@@ -130,33 +132,67 @@ def test_training_on_the_hand_made_dataset_learns_every_transition_and_counts_it
     confirm(client, advertiser)
     clock.set(datetime(2026, 9, 15, 8, 30, tzinfo=UTC))
 
+    assert training(client, advertiser).json() == {
+        "trainable": True,
+        "not_trainable_because": None,
+        "rule": RULE,
+        "latest": None,
+    }
+
     trained = train(client, advertiser)
 
     assert trained.status_code == 201, trained.text
-    assert trained.json()["trained_at"] == "2026-09-15T08:30:00Z"
-    assert trained.json()["transitions"] == HAND_MADE_TRANSITIONS
+    assert trained.json()["trainable"] is True
+    run = trained.json()["latest"]
+    assert run["trained_at"] == "2026-09-15T08:30:00Z"
+    assert run["transitions"] == HAND_MADE_TRANSITIONS
 
 
-def test_the_latest_training_run_reads_back_as_it_was_trained(
-    client: TestClient, clock: FixedClock
+def test_the_latest_training_run_reads_back_as_it_was_trained(client: TestClient):
+    advertiser = map_hand_made(client)
+    confirm(client, advertiser)
+
+    second = [train(client, advertiser).json() for _ in range(2)][-1]
+
+    assert training(client, advertiser).json() == second
+
+
+def test_of_runs_trained_at_the_same_clock_time_the_one_trained_last_is_the_latest(
+    client: TestClient,
 ):
     advertiser = map_hand_made(client)
     confirm(client, advertiser)
-    latest = f"/advertisers/{advertiser}/training-runs/latest"
-    assert client.get(latest).status_code == 404
 
+    runs = [train(client, advertiser).json()["latest"]["id"] for _ in range(3)]
+
+    assert len(set(runs)) == 3
+    assert training(client, advertiser).json()["latest"]["id"] == runs[-1]
+
+
+def test_when_the_latest_model_cannot_be_read_from_storage_it_says_so(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+):
+    advertiser = map_hand_made(client)
+    confirm(client, advertiser)
     train(client, advertiser)
-    clock.set(datetime(2026, 9, 16, tzinfo=UTC))
-    second = train(client, advertiser).json()
 
-    assert client.get(latest).json() == second
+    def unreachable(store: ObjectStore, key: str) -> bytes:
+        raise EndpointConnectionError(endpoint_url="http://object-storage")
+
+    monkeypatch.setattr(ObjectStore, "get", unreachable)
+    read = training(client, advertiser)
+
+    assert read.status_code == 503
+    assert read.json()["detail"] == (
+        "The latest Training run's model could not be read from storage. Try again."
+    )
 
 
 def test_the_model_is_kept_in_object_storage_as_readable_json(client: TestClient, bucket):
     advertiser = map_hand_made(client)
     confirm(client, advertiser)
 
-    run = train(client, advertiser).json()
+    run = train(client, advertiser).json()["latest"]
 
     stored = bucket.Object(f"advertisers/{advertiser}/training-runs/{run['id']}.json")
     model = json.loads(stored.get()["Body"].read())
@@ -168,7 +204,8 @@ def test_the_model_is_kept_in_object_storage_as_readable_json(client: TestClient
     ]
     first = model["transitions"][0]
     assert (first["made"], first["failed"], first["unfinished"]) == (67, 16, 4)
-    assert len(first["learned"]["coefficients"]) == 3 + 1 + 5 + 5
+    # A value and a missing flag per number, and one per category value.
+    assert len(first["regression"]["coefficients"]) == 3 * 2 + 5 + 5
 
 
 def test_when_the_training_run_cannot_be_recorded_its_model_is_not_kept_either(

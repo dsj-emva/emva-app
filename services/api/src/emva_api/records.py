@@ -7,10 +7,12 @@ from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     JSON,
+    BigInteger,
     DateTime,
     Enum,
     Float,
     ForeignKey,
+    Identity,
     Index,
     String,
     UniqueConstraint,
@@ -164,9 +166,12 @@ class TrainingRun(Base):
     parameters, as JSON) lives in object storage under model_key."""
 
     __tablename__ = "training_run"
-    __table_args__ = (Index("training_run_advertiser_id", "advertiser_id", "trained_at"),)
+    __table_args__ = (Index("training_run_advertiser_id", "advertiser_id", "number"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    # Increases with every run recorded, so the latest is known even when two runs share a
+    # clock time.
+    number: Mapped[int] = mapped_column(BigInteger, Identity(always=True), unique=True)
     advertiser_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("advertiser.id"))
     trained_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     model_key: Mapped[str] = mapped_column(String(255))
