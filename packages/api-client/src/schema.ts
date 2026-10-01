@@ -183,18 +183,6 @@ export interface components {
          * @enum {string}
          */
         ColumnKind: "number" | "category";
-        /**
-         * Country
-         * @description The countries a phone written without an international prefix can be read as from.
-         * @enum {string}
-         */
-        Country: "GB" | "IE";
-        /** CountryChoice */
-        CountryChoice: {
-            /** Name */
-            name: string;
-            value: components["schemas"]["Country"];
-        };
         /** CrmStage */
         CrmStage: {
             /** Name */
@@ -269,6 +257,16 @@ export interface components {
          */
         LeadsColumns: {
             /**
+             * Country
+             * @description The lead's country, used only to read its phone, then dropped
+             */
+            country?: string | null;
+            /**
+             * Currency
+             * @description The lead's currency, used only to read its phone, then dropped
+             */
+            currency?: string | null;
+            /**
              * Email
              * @description The lead's email, to be scrambled
              */
@@ -303,7 +301,7 @@ export interface components {
          * @description What a leads-file column can hold besides an input; each is a field of LeadsColumns.
          * @enum {string}
          */
-        LeadsRole: "lead_id" | "submitted_at" | "name" | "email" | "phone";
+        LeadsRole: "lead_id" | "submitted_at" | "name" | "email" | "phone" | "country" | "currency";
         /** LeadsRoleChoice */
         LeadsRoleChoice: {
             /** Label */
@@ -321,8 +319,6 @@ export interface components {
             };
             /** @description The order both files write dates in */
             date_order?: components["schemas"]["DateOrder"] | null;
-            /** @description Where a phone written without an international prefix is from */
-            default_country?: components["schemas"]["Country"] | null;
             /**
              * @default {
              *       "inputs": {}
@@ -347,11 +343,6 @@ export interface components {
              * @description When a person confirmed it; null in draft
              */
             confirmed_at: string | null;
-            /**
-             * Countries
-             * @description The countries a phone without an international prefix can be from
-             */
-            countries: components["schemas"]["CountryChoice"][];
             /**
              * Crm Stages
              * @description Every CRM stage name in the column marked as the CRM stage, most used first
@@ -470,6 +461,11 @@ export interface components {
              * @description Leads neither won nor lost yet
              */
             no_outcome_yet: number;
+            /**
+             * Phones Without Country
+             * @description Leads whose phone's country was not found, so its digits as written were hashed; to be resolved later
+             */
+            phones_without_country: number;
             /** Unreadable */
             unreadable: components["schemas"]["UnreadableRows"][];
             /** Won */

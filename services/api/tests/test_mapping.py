@@ -21,7 +21,6 @@ from emva_api.mapping import (
     confirm,
     problems,
 )
-from emva_api.personal_data import Country
 
 FILES = Files(
     leads_columns=["Lead ID", "Created", "Full Name", "Email", "Phone", "Trip Type", "Budget"],
@@ -48,7 +47,6 @@ COMPLETE = Mapping(
         "Closed lost": LOST,
     },
     typical_deal_size=8000,
-    default_country=Country.GB,
     date_order=DateOrder.DAY_MONTH_YEAR,
     time_zone="Europe/London",
 )
@@ -104,16 +102,40 @@ def test_the_time_zone_must_be_a_real_one():
     ]
 
 
-def test_with_a_phone_column_marked_the_default_country_must_be_picked():
-    without = COMPLETE.model_copy(update={"default_country": None})
+# The lead's country and currency, which only read its phone
 
-    assert problems(without, FILES) == [
-        "Pick the country a phone written without an international prefix is from."
-    ]
-    unmarked = without.model_copy(
-        update={"leads": without.leads.model_copy(update={"phone": None})}
+
+GEOGRAPHY = Files(
+    leads_columns=[*FILES.leads_columns, "Country", "Currency"],
+    stage_history_columns=FILES.stage_history_columns,
+    crm_stages=FILES.crm_stages,
+)
+
+
+def test_the_leads_country_and_currency_may_be_marked_or_left_unmarked():
+    assert problems(with_leads(country="Country", currency="Currency"), GEOGRAPHY) == []
+    assert problems(with_leads(country="Country"), GEOGRAPHY) == []
+    assert problems(COMPLETE, GEOGRAPHY) == []
+
+
+def test_the_leads_country_cannot_also_be_an_input_to_the_score():
+    found = problems(
+        with_leads(country="Country", inputs={"Country": ColumnKind.CATEGORY}), GEOGRAPHY
     )
-    assert problems(unmarked, FILES) == []
+
+    assert found == [
+        "The leads file's column “Country” is marked as the lead's country and an input to the "
+        "score; mark it as one only."
+    ]
+
+
+def test_the_leads_country_and_currency_are_two_columns():
+    found = problems(with_leads(country="Country", currency="Country"), GEOGRAPHY)
+
+    assert found == [
+        "The leads file's column “Country” is marked as the lead's country and the lead's "
+        "currency; mark it as one only."
+    ]
 
 
 # Category inputs carry neither contact details nor free text (decision 0010)

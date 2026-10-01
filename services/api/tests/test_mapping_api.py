@@ -25,6 +25,8 @@ COMPLETE = {
         "name": None,
         "email": "Email",
         "phone": None,
+        "country": None,
+        "currency": None,
         "inputs": {"Budget": "number"},
     },
     "stage_history": {
@@ -35,7 +37,6 @@ COMPLETE = {
     },
     "crm_stages": {"New enquiry": "submitted", "Closed won": "won"},
     "typical_deal_size": 8000.0,
-    "default_country": None,
     "date_order": "year_month_day",
     "time_zone": "UTC",
 }
@@ -88,6 +89,8 @@ def test_a_new_mapping_is_an_empty_draft_with_everything_still_to_do(client: Tes
             "name": None,
             "email": None,
             "phone": None,
+            "country": None,
+            "currency": None,
             "inputs": {},
         },
         "stage_history": {
@@ -98,7 +101,6 @@ def test_a_new_mapping_is_an_empty_draft_with_everything_still_to_do(client: Tes
         },
         "crm_stages": {},
         "typical_deal_size": None,
-        "default_country": None,
         "date_order": None,
         "time_zone": "UTC",
     }
@@ -107,17 +109,13 @@ def test_a_new_mapping_is_an_empty_draft_with_everything_still_to_do(client: Tes
     assert review["stages_and_lost"] == STAGES_AND_LOST
 
 
-def test_the_draft_comes_with_the_date_orders_and_countries_to_pick_from(client: TestClient):
+def test_the_draft_comes_with_the_date_orders_to_pick_from(client: TestClient):
     review = client.get(f"/advertisers/{advertiser_with_both_files(client)}/mapping").json()
 
     assert review["date_orders"] == [
         {"value": "year_month_day", "label": "Year-month-day (2024-01-05)"},
         {"value": "day_month_year", "label": "Day-month-year (05/01/2024)"},
         {"value": "month_day_year", "label": "Month-day-year (01/05/2024)"},
-    ]
-    assert review["countries"] == [
-        {"value": "GB", "name": "United Kingdom"},
-        {"value": "IE", "name": "Ireland"},
     ]
 
 
@@ -156,6 +154,8 @@ def test_the_draft_comes_with_what_each_column_can_hold(client: TestClient):
         {"role": "name", "label": "Name (removed)"},
         {"role": "email", "label": "Email (scrambled)"},
         {"role": "phone", "label": "Phone (scrambled)"},
+        {"role": "country", "label": "Country (reads the phone)"},
+        {"role": "currency", "label": "Currency (reads the phone)"},
     ]
     assert review["stage_history_roles"] == [
         {"role": "lead_id", "label": "Lead identifier"},

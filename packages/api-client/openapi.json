@@ -97,32 +97,6 @@
         "title": "ColumnKind",
         "type": "string"
       },
-      "Country": {
-        "description": "The countries a phone written without an international prefix can be read as from.",
-        "enum": [
-          "GB",
-          "IE"
-        ],
-        "title": "Country",
-        "type": "string"
-      },
-      "CountryChoice": {
-        "properties": {
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "value": {
-            "$ref": "#/components/schemas/Country"
-          }
-        },
-        "required": [
-          "value",
-          "name"
-        ],
-        "title": "CountryChoice",
-        "type": "object"
-      },
       "CrmStage": {
         "properties": {
           "name": {
@@ -275,6 +249,30 @@
       "LeadsColumns": {
         "description": "Which leads-file column holds what. Every column not marked here is dropped.",
         "properties": {
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The lead's country, used only to read its phone, then dropped",
+            "title": "Country"
+          },
+          "currency": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The lead's currency, used only to read its phone, then dropped",
+            "title": "Currency"
+          },
           "email": {
             "anyOf": [
               {
@@ -353,7 +351,9 @@
           "submitted_at",
           "name",
           "email",
-          "phone"
+          "phone",
+          "country",
+          "currency"
         ],
         "title": "LeadsRole",
         "type": "string"
@@ -395,17 +395,6 @@
               }
             ],
             "description": "The order both files write dates in"
-          },
-          "default_country": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/Country"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "Where a phone written without an international prefix is from"
           },
           "leads": {
             "$ref": "#/components/schemas/LeadsColumns",
@@ -452,14 +441,6 @@
             ],
             "description": "When a person confirmed it; null in draft",
             "title": "Confirmed At"
-          },
-          "countries": {
-            "description": "The countries a phone without an international prefix can be from",
-            "items": {
-              "$ref": "#/components/schemas/CountryChoice"
-            },
-            "title": "Countries",
-            "type": "array"
           },
           "crm_stages": {
             "description": "Every CRM stage name in the column marked as the CRM stage, most used first",
@@ -569,8 +550,7 @@
           "stage_history_roles",
           "input_kinds",
           "stages_and_lost",
-          "date_orders",
-          "countries"
+          "date_orders"
         ],
         "title": "MappingReview",
         "type": "object"
@@ -748,6 +728,11 @@
             "title": "No Outcome Yet",
             "type": "integer"
           },
+          "phones_without_country": {
+            "description": "Leads whose phone's country was not found, so its digits as written were hashed; to be resolved later",
+            "title": "Phones Without Country",
+            "type": "integer"
+          },
           "unreadable": {
             "items": {
               "$ref": "#/components/schemas/UnreadableRows"
@@ -766,6 +751,7 @@
           "lost",
           "no_outcome_yet",
           "neglected",
+          "phones_without_country",
           "unreadable"
         ],
         "title": "Summary",

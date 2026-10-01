@@ -118,6 +118,8 @@ class Lead(Base):
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     email_hash: Mapped[str | None] = mapped_column(String(64))
     phone_hash: Mapped[str | None] = mapped_column(String(64))
+    # False when the phone's country was not found, so its digits as written were hashed.
+    phone_country_found: Mapped[bool | None]
     number_inputs: Mapped[dict[str, float | None]] = mapped_column(JSON)
     category_inputs: Mapped[dict[str, str | None]] = mapped_column(JSON)
     stage_events: Mapped[list["LeadStageEvent"]] = relationship(order_by="LeadStageEvent.at")
@@ -165,6 +167,7 @@ def keep_formatted(
                 "submitted_at": lead.submitted_at,
                 "email_hash": lead.email_hash,
                 "phone_hash": lead.phone_hash,
+                "phone_country_found": lead.phone_country_found,
                 "number_inputs": lead.numbers,
                 "category_inputs": lead.categories,
             }

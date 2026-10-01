@@ -2,9 +2,10 @@
 Mapping, into Emva's canonical leads and their stage events, outcome included.
 
 Personal data never comes out (decision 0010): names are dropped; the lead identifier, email
-and phone are hashed (the files are joined on the identifier's hash); every column the Mapping
-does not mark is dropped. A row it cannot read is reported by its row number and a reason only,
-never by its lead or anything it holds. Pure: no I/O.
+and phone are hashed (the files are joined on the identifier's hash); the lead's country and
+currency only read its phone and are dropped; every column the Mapping does not mark is dropped.
+A row it cannot read is reported by its row number and a reason only, never by its lead or
+anything it holds. Pure: no I/O.
 """
 
 import math
@@ -20,7 +21,7 @@ from emva_api.dates import Unreadable as UnreadableTime
 from emva_api.dates import read_time, time_zone
 from emva_api.ladder import Lost, StageEvent, Won, progress
 from emva_api.mapping import ColumnKind, ConfirmedMapping, Mapping
-from emva_api.personal_data import hashed_email, hashed_identifier, hashed_phone
+from emva_api.personal_data import hashed_email, hashed_identifier, hashed_phone, phone_region
 from emva_api.records import FileKind
 
 # How many row numbers an unreadable-rows report lists for each reason.
@@ -33,6 +34,9 @@ class FormattedLead:
     submitted_at: datetime
     email_hash: str | None
     phone_hash: str | None
+    # False when the phone's country was not found, so its digits as written were hashed; None
+    # without a phone.
+    phone_country_found: bool | None
     numbers: dict[str, float | None]
     categories: dict[str, str | None]
     stage_events: tuple[StageEvent, ...] = ()
@@ -57,6 +61,10 @@ class Summary(BaseModel):
     lost: int
     no_outcome_yet: int = Field(description="Leads neither won nor lost yet")
     neglected: int = Field(description="Neglected leads: never attempted to contact")
+    phones_without_country: int = Field(
+        description="Leads whose phone's country was not found, so its digits as written were "
+        "hashed; to be resolved later"
+    )
     unreadable: list[UnreadableRows]
 
 
@@ -85,16 +93,15 @@ def format_lead(cells: dict[str, str], mapping: Mapping) -> FormattedLead:
             numbers[column] = _number(cell(column), f"“{column}” is not a number.")
         else:
             categories[column] = cell(column) or None
-    phone = cell(columns.phone)
+    # The lead's country and currency only read its phone; neither is kept.
+    region = phone_region(cell(columns.country), cell(columns.currency))
+    phone = hashed_phone(cell(columns.phone), region)
     return FormattedLead(
         identifier_hash=identifier_hash,
         submitted_at=submitted_at,
         email_hash=hashed_email(cell(columns.email)),
-        phone_hash=(
-            hashed_phone(phone, mapping.default_country)
-            if phone and mapping.default_country is not None
-            else None
-        ),
+        phone_hash=phone and phone.hash,
+        phone_country_found=phone and phone.country_found,
         numbers=numbers,
         categories=categories,
     )
@@ -173,6 +180,7 @@ def _summary(leads: list[FormattedLead], unreadable: list[tuple[FileKind, int, s
         lost=outcomes[Lost],
         no_outcome_yet=outcomes[type(None)],
         neglected=sum(lead.neglected for lead in progresses),
+        phones_without_country=sum(lead.phone_country_found is False for lead in leads),
         unreadable=[
             UnreadableRows(file=file, reason=reason, count=counts[file, reason], first_rows=rows)
             for (file, reason), rows in grouped.items()
@@ -182,7 +190,15 @@ def _summary(leads: list[FormattedLead], unreadable: list[tuple[FileKind, int, s
 
 def _leads_columns(mapping: Mapping) -> list[str | None]:
     leads = mapping.leads
-    return [leads.lead_id, leads.submitted_at, leads.email, leads.phone, *leads.inputs]
+    return [
+        leads.lead_id,
+        leads.submitted_at,
+        leads.email,
+        leads.phone,
+        leads.country,
+        leads.currency,
+        *leads.inputs,
+    ]
 
 
 def _stage_history_columns(mapping: Mapping) -> list[str | None]:

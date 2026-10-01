@@ -97,6 +97,8 @@ HAND_MADE_MAPPING = {
         "name": "Full Name",
         "email": "Email",
         "phone": "Phone",
+        "country": None,
+        "currency": None,
         "inputs": {
             "Enquiry Channel": "category",
             "Trip Type": "category",
@@ -124,7 +126,6 @@ HAND_MADE_MAPPING = {
         "Closed Lost": "lost",
     },
     "typical_deal_size": 12000.0,
-    "default_country": "GB",
     "date_order": "year_month_day",
     "time_zone": "Europe/London",
 }

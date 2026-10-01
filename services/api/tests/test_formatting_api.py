@@ -27,6 +27,7 @@ HAND_MADE_SUMMARY = {
     "lost": 58,
     "no_outcome_yet": 24,
     "neglected": 13,
+    "phones_without_country": 0,
     "unreadable": [
         {
             "file": "leads",

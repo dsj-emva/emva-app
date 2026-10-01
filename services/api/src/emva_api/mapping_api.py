@@ -45,7 +45,6 @@ from emva_api.mapping import (
     StageHistoryRole,
 )
 from emva_api.object_store import ObjectStore
-from emva_api.personal_data import DIALLING, Country
 from emva_api.records import FileKind
 
 router = APIRouter()
@@ -102,11 +101,6 @@ class DateOrderChoice(BaseModel):
     label: str
 
 
-class CountryChoice(BaseModel):
-    value: Country
-    name: str
-
-
 class MappingReview(BaseModel):
     mapping: Mapping
     confirmed_at: datetime | None = Field(description="When a person confirmed it; null in draft")
@@ -129,9 +123,6 @@ class MappingReview(BaseModel):
         description="What a CRM stage can be placed on: the Canonical ladder in order, then Lost"
     )
     date_orders: list[DateOrderChoice] = Field(description="The orders dates can be written in")
-    countries: list[CountryChoice] = Field(
-        description="The countries a phone without an international prefix can be from"
-    )
 
 
 @router.get(
@@ -380,7 +371,6 @@ def _review(
             StageOrLostChoice(value=value, name=name_of(value)) for value in STAGES_AND_LOST
         ],
         date_orders=[DateOrderChoice(value=o, label=text) for o, text in DATE_ORDERS.items()],
-        countries=[CountryChoice(value=c, name=d.name) for c, d in DIALLING.items()],
     )
 
 

@@ -17,8 +17,8 @@ from emva_api.formatter import (
     format_lead,
 )
 from emva_api.ladder import Stage, StageEvent
-from emva_api.mapping import ConfirmedMapping, Mapping
-from emva_api.personal_data import Country, hashed_email, hashed_identifier, hashed_phone
+from emva_api.mapping import ColumnKind, ConfirmedMapping, Mapping
+from emva_api.personal_data import hashed_email, hashed_identifier, hashed_phone
 from emva_api.records import FileKind
 
 MAPPING = Mapping.model_validate(
@@ -46,14 +46,13 @@ MAPPING = Mapping.model_validate(
             "Lost": "lost",
         },
         "typical_deal_size": 10000.0,
-        "default_country": "GB",
         "date_order": "year_month_day",
         "time_zone": "UTC",
     }
 )
 
 LEADS_HEADER = "Lead ID,Created,Name,Email,Phone,Trip,Budget,Notes"
-ADA = "L1,2024-01-04 09:12,Ada Fenwick, Ada@Example.com ,07700 900101,Safari,18500,called twice"
+ADA = "L1,2024-01-04 09:12,Ada Fenwick, Ada@Example.com ,+44 7700 900101,Safari,18500,called twice"
 HISTORY_HEADER = "Lead,Stage,When,Value,By"
 ADA_SUBMITTED = "L1,New,2024-01-04 09:12,,system"
 
@@ -78,7 +77,8 @@ def test_a_lead_keeps_hashes_of_what_identifies_it_its_submission_time_and_input
             identifier_hash=hashed_identifier("L1"),
             submitted_at=when(4, 9, 12),
             email_hash=hashed_email("ada@example.com"),
-            phone_hash=hashed_phone("+447700900101", Country.GB),
+            phone_hash=hashed_phone("+447700900101", None).hash,
+            phone_country_found=True,
             numbers={"Budget": 18500.0},
             categories={"Trip": "Safari"},
             stage_events=(StageEvent(Stage.SUBMITTED, when(4, 9, 12)),),
@@ -98,6 +98,7 @@ def test_one_new_lead_is_formatted_by_the_same_code_from_its_values_alone():
         submitted_at=when(4, 9, 12),
         email_hash=None,
         phone_hash=None,
+        phone_country_found=None,
         numbers={"Budget": 900.0},
         categories={"Trip": "Safari"},
     )
@@ -274,5 +275,76 @@ def test_the_summary_counts_leads_by_outcome_and_the_neglected_leads():
     )
 
     assert result.summary.model_dump(exclude={"unreadable"}) == Summary(
-        lead_count=5, won=1, lost=2, no_outcome_yet=2, neglected=2, unreadable=[]
+        lead_count=5,
+        won=1,
+        lost=2,
+        no_outcome_yet=2,
+        neglected=2,
+        phones_without_country=0,
+        unreadable=[],
     ).model_dump(exclude={"unreadable"})
+
+
+# Phones of guests from everywhere (ruling 10): hand-made leads of a safari advertiser whose
+# CRM keeps each lead's country and the currency it was quoted in.
+
+GUESTS = """Lead ID,Created,Phone,Country,Currency,Budget
+G1,2024-03-01 10:00,+254 712 345678,,,1
+G2,2024-03-01 10:00,00254 712 345678,,,1
+G3,2024-03-01 10:00,0712 345678,KE,,1
+G4,2024-03-01 10:00,0712 345678,Kenya,,1
+G5,2024-03-01 10:00,0712 345678,+254,,1
+G6,2024-03-01 10:00,0712 345678,,KES,1
+G7,2024-03-01 10:00,0712 345678,,EUR,1
+G8,2024-03-01 10:00,0712 345678,,,1
+G9,2024-03-01 10:00,12,Kenya,,1
+G10,2024-03-01 10:00,,Kenya,KES,1
+"""
+GUEST_MAPPING = MAPPING.model_copy(
+    update={
+        "leads": MAPPING.leads.model_copy(
+            update={
+                "name": None,
+                "email": None,
+                "phone": "Phone",
+                "country": "Country",
+                "currency": "Currency",
+                "inputs": {"Budget": ColumnKind.NUMBER},
+            }
+        )
+    }
+)
+KENYAN = hashed_phone("+254712345678", None)
+
+
+def guests() -> Formatted:
+    confirmed = ConfirmedMapping(
+        mapping=GUEST_MAPPING, confirmed_at=datetime(2026, 9, 14, tzinfo=UTC)
+    )
+    history = read_csv(b"Lead,Stage,When,Value,By\nG1,New,2024-03-01 10:00,,x\n")
+    return format_files(read_csv(GUESTS.encode()), history, confirmed)
+
+
+def test_a_guests_phone_is_resolved_from_its_prefix_country_or_single_country_currency():
+    phones = {lead.identifier_hash: lead for lead in guests().leads}
+
+    for guest in ["G1", "G2", "G3", "G4", "G5", "G6"]:
+        lead = phones[hashed_identifier(guest)]
+        assert (lead.phone_hash, lead.phone_country_found) == (KENYAN.hash, True), guest
+
+
+@pytest.mark.parametrize("guest", ["G7", "G8", "G9"])
+def test_a_guests_phone_without_a_clue_to_its_country_keeps_its_digits_and_is_flagged(guest):
+    lead = next(g for g in guests().leads if g.identifier_hash == hashed_identifier(guest))
+
+    assert lead.phone_country_found is False
+    assert lead.phone_hash != KENYAN.hash
+
+
+def test_the_summary_counts_the_phones_without_a_country_and_keeps_neither_column():
+    result = guests()
+
+    assert result.summary.phones_without_country == 3
+    lead = result.leads[-1]
+    assert (lead.phone_hash, lead.phone_country_found) == (None, None)
+    assert "Kenya" not in repr(result) and "KES" not in repr(result)

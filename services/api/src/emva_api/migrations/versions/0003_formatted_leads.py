@@ -37,6 +37,7 @@ def upgrade() -> None:
         sa.Column("submitted_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("email_hash", sa.String(length=64), nullable=True),
         sa.Column("phone_hash", sa.String(length=64), nullable=True),
+        sa.Column("phone_country_found", sa.Boolean(), nullable=True),
         sa.Column("number_inputs", sa.JSON(), nullable=False),
         sa.Column("category_inputs", sa.JSON(), nullable=False),
         sa.ForeignKeyConstraint(["advertiser_id"], ["advertiser.id"]),

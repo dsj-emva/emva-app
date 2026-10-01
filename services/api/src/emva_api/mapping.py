@@ -13,7 +13,6 @@ from pydantic import BaseModel, ConfigDict, Field
 from emva_api.csv_file import ColumnFacts
 from emva_api.dates import DateOrder, is_time_zone
 from emva_api.ladder import Stage, StageOrLost
-from emva_api.personal_data import Country
 
 
 class ColumnKind(enum.StrEnum):
@@ -33,6 +32,12 @@ class LeadsColumns(BaseModel):
     name: str | None = Field(None, description="The lead's name, to be removed")
     email: str | None = Field(None, description="The lead's email, to be scrambled")
     phone: str | None = Field(None, description="The lead's phone, to be scrambled")
+    country: str | None = Field(
+        None, description="The lead's country, used only to read its phone, then dropped"
+    )
+    currency: str | None = Field(
+        None, description="The lead's currency, used only to read its phone, then dropped"
+    )
     inputs: dict[str, ColumnKind] = Field(
         default_factory=dict, description="The inputs to the score, each read as its kind"
     )
@@ -56,9 +61,6 @@ class Mapping(BaseModel):
         default_factory=dict, description="Where each CRM stage name sits: a Stage, or Lost"
     )
     typical_deal_size: float | None = Field(None, allow_inf_nan=False)
-    default_country: Country | None = Field(
-        None, description="Where a phone written without an international prefix is from"
-    )
     date_order: DateOrder | None = Field(None, description="The order both files write dates in")
     time_zone: str = Field("UTC", description="The zone of every time written without one")
 
@@ -101,6 +103,8 @@ class LeadsRole(enum.StrEnum):
     NAME = "name"
     EMAIL = "email"
     PHONE = "phone"
+    COUNTRY = "country"
+    CURRENCY = "currency"
 
 
 class StageHistoryRole(enum.StrEnum):
@@ -125,6 +129,8 @@ LEADS_ROLES: dict[LeadsRole, Role] = {
     LeadsRole.NAME: Role("Name (removed)", "the lead's name"),
     LeadsRole.EMAIL: Role("Email (scrambled)", "the lead's email"),
     LeadsRole.PHONE: Role("Phone (scrambled)", "the lead's phone"),
+    LeadsRole.COUNTRY: Role("Country (reads the phone)", "the lead's country"),
+    LeadsRole.CURRENCY: Role("Currency (reads the phone)", "the lead's currency"),
 }
 STAGE_HISTORY_ROLES: dict[StageHistoryRole, Role] = {
     StageHistoryRole.LEAD_ID: Role("Lead identifier", "the lead identifier", required=True),
@@ -174,8 +180,6 @@ def problems(mapping: Mapping, files: Files) -> list[str]:
         found.append(
             f"“{mapping.time_zone}” is not a time zone; use a name such as Europe/London or UTC."
         )
-    if leads.phone is not None and mapping.default_country is None:
-        found.append("Pick the country a phone written without an international prefix is from.")
 
     if mapping.typical_deal_size is None:
         found.append("Enter the typical deal size.")
