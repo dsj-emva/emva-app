@@ -2,7 +2,7 @@
 model and its Backtest inside the request (ruling 4 of the phase 1 PRD), and the latest Training
 run.
 
-Nothing trains before a person has confirmed the Mapping and its data is formatted. Training is
+Nothing trains before a person has confirmed the Mapping, which formats its data. Training is
 serialised per advertiser by holding its row. A Training run is recorded in Postgres at the
 injected clock's time; its model and its Backtest are kept in object storage as JSON, never
 pickled, so they are readable and safe to load. Every number of a run carries the label of the
@@ -30,7 +30,6 @@ from emva_api.dependencies import (
     find_advertiser,
 )
 from emva_api.mapping import Mapping
-from emva_api.mapping_api import NOT_FORMATTED_YET
 from emva_api.model import RULE, Model, train
 from emva_api.object_store import MissingObject, ObjectStore
 from emva_api.training_runs import STORAGE_FAILED, latest_run
@@ -38,9 +37,6 @@ from emva_api.transitions import LEFT_OUT, Transition
 
 router = APIRouter()
 
-TRAINED_BEFORE_BACKTESTS = (
-    "This run was trained before Backtests were kept. Train again to see its results."
-)
 RESULTS_UNREADABLE = "The results of this run's Backtest could not be read from storage. Try again."
 
 
@@ -104,8 +100,7 @@ def get_training(advertiser_id: uuid.UUID, session: SessionDep, store: StoreDep)
         **STORAGE_FAILED,
         status.HTTP_409_CONFLICT: {
             "model": Problem,
-            "description": "The mapping is not confirmed, its data not formatted, or it marks "
-            "no input",
+            "description": "The mapping is not confirmed, or it marks no input",
         },
     },
 )
@@ -155,8 +150,6 @@ def _not_trainable_because(advertiser: records.Advertiser) -> str | None:
     mapping = advertiser.mapping
     if mapping is None or mapping.confirmed_at is None:
         return "The mapping is not confirmed yet. Nothing trains before a person confirms it."
-    if advertiser.formatting is None:
-        return NOT_FORMATTED_YET
     if not Mapping.model_validate(mapping.content).leads.inputs:
         return "The mapping marks no input to the score, so there is nothing to learn from."
     return None
@@ -180,8 +173,6 @@ def _latest(
     if latest is None:
         return None
     run, model = latest
-    if run.backtest_key is None:
-        return _view(advertiser, run, model, None, TRAINED_BEFORE_BACKTESTS)
     try:
         results = Backtest.model_validate_json(store.get(run.backtest_key))
     except (BotoCoreError, ClientError, MissingObject):

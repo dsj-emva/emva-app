@@ -113,8 +113,7 @@ export interface paths {
          *     operation; refused while it has problems. The formatted data and the confirmation are saved
          *     together or not at all; then each raw file is deleted, and recorded as deleted, in turn.
          *
-         *     Confirming again finishes what was interrupted: it formats a mapping confirmed before its
-         *     data was formatted, while the raw files are there, and deletes raw files still kept.
+         *     Confirming again finishes what was interrupted: it deletes raw files still kept.
          */
         post: operations["confirmMapping"];
         delete?: never;
@@ -1587,7 +1586,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description The mapping is not confirmed, its data not formatted, or it marks no input */
+            /** @description The mapping is not confirmed, or it marks no input */
             409: {
                 headers: {
                     [name: string]: unknown;

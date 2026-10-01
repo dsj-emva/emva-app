@@ -111,7 +111,7 @@ describe('Training', () => {
 
   it('says why the latest run’s Backtest results are unavailable, as the service does', async () => {
     const because =
-      'This run was trained before Backtests were kept. Train again to see its results.'
+      "The results of this run's Backtest could not be read from storage. Try again."
     const service = fakeService({
       [`GET ${TRAINING}`]: () =>
         Response.json({
