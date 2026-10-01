@@ -95,3 +95,8 @@ def test_a_file_that_is_not_text_is_refused():
 def test_a_file_holding_null_characters_is_refused():
     with pytest.raises(UnreadableFile, match="The file is not a readable CSV file."):
         read_csv(b"Lead ID,Budget\nL1,50\x0000\n")
+
+
+def test_a_file_with_a_value_too_long_to_be_one_cell_is_refused():
+    with pytest.raises(UnreadableFile, match="The file is not a readable CSV file."):
+        read_csv(b"Lead ID,Notes\nL1," + b"x" * 200_000 + b"\n")

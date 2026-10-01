@@ -39,7 +39,10 @@ def read_csv(content: bytes) -> Table:
     if "\x00" in text:
         raise UnreadableFile("The file is not a readable CSV file.")
     reader = csv.reader(io.StringIO(text, newline=""))
-    lines = [line for line in reader if any(cell.strip() for cell in line)]
+    try:
+        lines = [line for line in reader if any(cell.strip() for cell in line)]
+    except csv.Error as error:
+        raise UnreadableFile("The file is not a readable CSV file.") from error
 
     if not lines:
         raise UnreadableFile("The file is empty.")
