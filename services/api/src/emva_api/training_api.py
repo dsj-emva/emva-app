@@ -30,6 +30,7 @@ from emva_api.dependencies import (
     find_advertiser,
 )
 from emva_api.mapping import Mapping
+from emva_api.mapping_api import NOT_FORMATTED_YET
 from emva_api.model import RULE, Model, train
 from emva_api.object_store import MissingObject, ObjectStore
 from emva_api.training_runs import STORAGE_FAILED, latest_run
@@ -154,10 +155,7 @@ def _not_trainable_because(advertiser: records.Advertiser) -> str | None:
     if mapping is None or mapping.confirmed_at is None:
         return "The mapping is not confirmed yet. Nothing trains before a person confirms it."
     if advertiser.formatting is None:
-        return (
-            "The mapping is confirmed but its data is not formatted yet. Confirm again to "
-            "format it."
-        )
+        return NOT_FORMATTED_YET
     if not Mapping.model_validate(mapping.content).leads.inputs:
         return "The mapping marks no input to the score, so there is nothing to learn from."
     return None

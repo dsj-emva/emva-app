@@ -49,6 +49,11 @@ from emva_api.records import FileKind
 
 router = APIRouter()
 
+# Said by the review screen and by training, of a mapping confirmed before its data was formatted.
+NOT_FORMATTED_YET = (
+    "The mapping is confirmed but its data is not formatted yet. Confirm again to format it."
+)
+
 
 class CrmStage(BaseModel):
     name: str
@@ -327,10 +332,7 @@ def _confirmed_review(
     if formatting is None and lacking:
         still_to_do = _never_formatted(lacking).detail
     elif formatting is None:
-        still_to_do = (
-            "The mapping is confirmed but its data is not formatted yet. Confirm again to "
-            "format it."
-        )
+        still_to_do = NOT_FORMATTED_YET
     elif _raw_uploads(advertiser):
         still_to_do = (
             "The data is formatted, but the raw files are not all deleted yet. Confirm again "
