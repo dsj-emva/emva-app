@@ -4,7 +4,6 @@ and the records always match what is in storage."""
 
 import csv
 import io
-import json
 import re
 from datetime import UTC, datetime
 
@@ -216,110 +215,6 @@ def test_when_one_raw_file_cannot_be_deleted_the_records_say_which_is_still_kept
     assert again.json()["still_to_do"] is None
     assert raw_kept(client, advertiser) == raw_files(bucket, advertiser) == []
     assert confirm(client, advertiser).status_code == 409
-
-
-# A mapping confirmed before formatting existed (#15), with no formatting: never a 500, and its
-# raw files are never deleted unformatted.
-
-
-def confirmed_without_formatting(client: TestClient, settings: Settings, mapping: dict) -> str:
-    advertiser = upload_hand_made(client)
-    review = client.put(f"/advertisers/{advertiser}/mapping", json=mapping).json()
-    described = client.get(f"/advertisers/{advertiser}").json()
-    shape = {
-        "leads_columns": described["leads_file"]["column_names"],
-        "stage_history_columns": described["stage_history_file"]["column_names"],
-        "crm_stages": review["crm_stages"],
-    }
-    engine = create_engine(settings.database_url)
-    with engine.begin() as connection:
-        connection.execute(
-            text(
-                "UPDATE mapping SET confirmed_at = '2026-09-01T10:00:00Z', "
-                "confirmed_against = CAST(:shape AS json) WHERE advertiser_id = :id"
-            ),
-            {"shape": json.dumps(shape), "id": advertiser},
-        )
-    engine.dispose()
-    return advertiser
-
-
-def test_an_old_confirmed_mapping_reads_without_error_and_says_formatting_is_still_to_do(
-    client: TestClient, settings: Settings, bucket
-):
-    advertiser = confirmed_without_formatting(client, settings, HAND_MADE_MAPPING)
-
-    review = client.get(f"/advertisers/{advertiser}/mapping")
-
-    assert review.status_code == 200
-    assert review.json()["formatting"] is None
-    assert review.json()["still_to_do"] == (
-        "The mapping is confirmed but its data is not formatted yet. Confirm again to format it."
-    )
-    assert raw_files(bucket, advertiser) == ["leads", "stage-history"]
-
-
-def test_confirming_an_old_confirmed_mapping_again_formats_it_while_its_raw_files_are_there(
-    client: TestClient, settings: Settings, bucket
-):
-    advertiser = confirmed_without_formatting(client, settings, HAND_MADE_MAPPING)
-
-    again = confirm(client, advertiser)
-
-    assert again.status_code == 200, again.text
-    assert again.json()["formatting"] == HAND_MADE_SUMMARY
-    assert again.json()["confirmed_at"] == "2026-09-01T10:00:00Z"
-    assert raw_files(bucket, advertiser) == []
-
-
-def test_formatting_on_confirming_again_is_dated_by_the_clock_not_by_the_confirmation(
-    client: TestClient, settings: Settings, clock: FixedClock
-):
-    advertiser = confirmed_without_formatting(client, settings, HAND_MADE_MAPPING)
-    clock.set(datetime(2026, 9, 14, 11, 30, tzinfo=UTC))
-
-    again = confirm(client, advertiser).json()
-
-    assert again["confirmed_at"] == "2026-09-01T10:00:00Z"
-    assert again["formatted_at"] == "2026-09-14T11:30:00Z"
-
-
-def test_an_old_confirmed_mapping_whose_raw_file_is_gone_says_to_start_a_new_advertiser(
-    client: TestClient, settings: Settings, bucket
-):
-    advertiser = confirmed_without_formatting(client, settings, HAND_MADE_MAPPING)
-    for stored in bucket.objects.filter(Prefix=f"advertisers/{advertiser}/leads/"):
-        stored.delete()
-
-    refused = confirm(client, advertiser)
-
-    assert refused.status_code == 409
-    assert (
-        "cannot be formatted now: the raw leads file can no longer be read"
-        in (refused.json()["detail"])
-    )
-    assert "start a new advertiser" in refused.json()["detail"]
-    assert raw_files(bucket, advertiser) == ["stage-history"]
-    assert client.get(f"/advertisers/{advertiser}/mapping").json()["formatting"] is None
-
-
-def test_an_old_confirmed_mapping_without_a_date_order_cannot_be_formatted_and_keeps_its_files(
-    client: TestClient, settings: Settings, bucket
-):
-    old = {key: value for key, value in HAND_MADE_MAPPING.items() if key != "date_order"}
-    advertiser = confirmed_without_formatting(client, settings, old)
-
-    still_to_do = client.get(f"/advertisers/{advertiser}/mapping").json()["still_to_do"]
-    refused = confirm(client, advertiser)
-
-    assert "Confirm again" not in still_to_do
-    assert "start a new advertiser" in still_to_do
-    assert still_to_do == refused.json()["detail"]
-
-    assert refused.status_code == 409
-    assert "Pick the order the files write dates in." in refused.json()["detail"]
-    assert "start a new advertiser" in refused.json()["detail"]
-    assert raw_files(bucket, advertiser) == ["leads", "stage-history"]
 
 
 # Done when: no name, raw email or raw phone number from the hand-made dataset is found anywhere

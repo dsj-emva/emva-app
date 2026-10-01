@@ -2025,7 +2025,7 @@
     },
     "/advertisers/{advertiser_id}/mapping/confirmation": {
       "post": {
-        "description": "Confirm the saved draft, recording when, and format both files with it in the same\noperation; refused while it has problems. The formatted data and the confirmation are saved\ntogether or not at all; then each raw file is deleted, and recorded as deleted, in turn.\n\nConfirming again finishes what was interrupted: it formats a mapping confirmed before its\ndata was formatted, while the raw files are there, and deletes raw files still kept.",
+        "description": "Confirm the saved draft, recording when, and format both files with it in the same\noperation; refused while it has problems. The formatted data and the confirmation are saved\ntogether or not at all; then each raw file is deleted, and recorded as deleted, in turn.\n\nConfirming again finishes what was interrupted: it deletes raw files still kept.",
         "operationId": "confirmMapping",
         "parameters": [
           {
@@ -2362,7 +2362,7 @@
                 }
               }
             },
-            "description": "The mapping is not confirmed, its data not formatted, or it marks no input"
+            "description": "The mapping is not confirmed, or it marks no input"
           },
           "422": {
             "content": {

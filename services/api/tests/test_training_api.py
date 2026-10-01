@@ -1,6 +1,6 @@
 """Training through the API: a Training run is recorded in Postgres at the injected clock's time
 and its model kept in object storage as JSON; nothing trains, and nothing is stored, before the
-Mapping is confirmed and its data formatted."""
+Mapping is confirmed."""
 
 import json
 from collections.abc import Iterator
@@ -12,7 +12,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
-from test_formatting_api import confirm, confirmed_without_formatting, map_hand_made
+from test_formatting_api import confirm, map_hand_made
 from test_hand_made_upload import HAND_MADE_MAPPING, upload_hand_made
 
 from emva_api.clock import FixedClock
@@ -102,19 +102,6 @@ def test_training_is_refused_before_the_mapping_is_confirmed_and_nothing_is_stor
             advertiser,
             "The mapping is not confirmed yet. Nothing trains before a person confirms it.",
         )
-    assert training_runs_stored(own_settings, own_bucket) == (0, [])
-
-
-def test_training_is_refused_when_the_mapping_is_confirmed_but_its_data_not_formatted(
-    own_client: TestClient, own_settings: Settings, own_bucket
-):
-    advertiser = confirmed_without_formatting(own_client, own_settings, HAND_MADE_MAPPING)
-
-    refused_with(
-        own_client,
-        advertiser,
-        "The mapping is confirmed but its data is not formatted yet. Confirm again to format it.",
-    )
     assert training_runs_stored(own_settings, own_bucket) == (0, [])
 
 
@@ -301,27 +288,6 @@ def test_when_the_runs_results_cannot_be_read_its_model_still_shows_and_says_so(
         "The results of this run's Backtest could not be read from storage. Try again."
     )
     assert trained["results_unavailable_because"] is None
-
-
-def test_a_run_trained_before_backtests_were_kept_says_to_train_again(
-    client: TestClient, settings: Settings
-):
-    advertiser = map_hand_made(client)
-    confirm(client, advertiser)
-    run = train(client, advertiser).json()["latest"]
-    engine = create_engine(settings.database_url)
-    with engine.begin() as connection:
-        connection.execute(
-            text("UPDATE training_run SET backtest_key = NULL WHERE id = :id"), {"id": run["id"]}
-        )
-    engine.dispose()
-
-    latest = training(client, advertiser).json()["latest"]
-
-    assert latest["backtest"] is None
-    assert latest["results_unavailable_because"] == (
-        "This run was trained before Backtests were kept. Train again to see its results."
-    )
 
 
 def test_when_one_kept_object_cannot_be_deleted_the_other_still_is(

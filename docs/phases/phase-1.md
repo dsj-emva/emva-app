@@ -1,9 +1,9 @@
 # Phase 1 report: the first thin slice
 
-- State: waiting for approval
+- State: done (approved by the user on 2026-10-01)
 - Date: 2026-10-01
 - Plan: PRD [#4](https://github.com/dsj-emva/emva-app/issues/4) (with the user's rulings in its comments, repeated below), issues #5 to #11 in the "Phase 1" milestone
-- Pull requests (all merged): [#12](https://github.com/dsj-emva/emva-app/pull/12) (start, new words), [#13](https://github.com/dsj-emva/emva-app/pull/13) (upload), [#14](https://github.com/dsj-emva/emva-app/pull/14) (Railway containers), [#15](https://github.com/dsj-emva/emva-app/pull/15) (Mapping), [#16](https://github.com/dsj-emva/emva-app/pull/16) (Formatter), [#19](https://github.com/dsj-emva/emva-app/pull/19) (training), [#20](https://github.com/dsj-emva/emva-app/pull/20) (scoring), [#21](https://github.com/dsj-emva/emva-app/pull/21) (Backtest results), [#22](https://github.com/dsj-emva/emva-app/pull/22) (end-of-phase cleanup), and this report
+- Pull requests (all merged): [#12](https://github.com/dsj-emva/emva-app/pull/12) (start, new words), [#13](https://github.com/dsj-emva/emva-app/pull/13) (upload), [#14](https://github.com/dsj-emva/emva-app/pull/14) (Railway containers), [#15](https://github.com/dsj-emva/emva-app/pull/15) (Mapping), [#16](https://github.com/dsj-emva/emva-app/pull/16) (Formatter), [#19](https://github.com/dsj-emva/emva-app/pull/19) (training), [#20](https://github.com/dsj-emva/emva-app/pull/20) (scoring), [#21](https://github.com/dsj-emva/emva-app/pull/21) (Backtest results), [#22](https://github.com/dsj-emva/emva-app/pull/22) (end-of-phase cleanup), this report ([#23](https://github.com/dsj-emva/emva-app/pull/23)) and the close-out at approval ([#24](https://github.com/dsj-emva/emva-app/pull/24))
 - Live: https://web-production-1d4fc.up.railway.app (Railway, europe-west4; open, no access protection, hand-made data only)
 
 ## What was built
@@ -46,7 +46,7 @@ One path, screen to model and back, on the hand-made dataset in `services/api/te
 | check | how it was run | result |
 |---|---|---|
 | In the browser, on the hand-made dataset: upload, map columns and sales steps on the review screen and confirm, train, see calibration and the status-quo comparison, score one lead and see its explanation | Browser pane, local dev stack (main at 5d2461e) and Railway (5d2461e, then re-run at 9b3eb1c). Mapping filled in by hand through the screen's controls; the draft read back equal to the tests' mapping. Files sent through the screen's own file input from a script, because the browser tool cannot open the OS file picker | **pass** locally and on Railway, identical numbers (below). Screenshots: [results](phase-1/results.png), [score](phase-1/score.png), [Railway results](phase-1/railway-results.png), [Railway score](phase-1/railway-score.png) |
-| Nothing trains before the mapping is confirmed (a test proves it) | `test_training_api.py::test_training_is_refused_before_the_mapping_is_confirmed_and_nothing_is_stored` (also refused when confirmed but not formatted) | **pass** |
+| Nothing trains before the mapping is confirmed (a test proves it) | `test_training_api.py::test_training_is_refused_before_the_mapping_is_confirmed_and_nothing_is_stored` (a variant for a confirmed mapping not yet formatted went with the repair code at approval: confirming now always formats) | **pass** |
 | No name, raw email or raw phone number is stored after formatting (a test proves it) | `test_formatting_api.py::test_after_formatting_no_personal_data_is_stored_anywhere`. It proves first that the scan can see the data, then scans every Postgres table and every stored object after formatting, training and scoring, including the model and Backtest JSON. A variant uses emails as lead identifiers and a free-text column | **pass** |
 | Tests cover mapping sales steps onto the standard ladder, the score formula and the injected clock | Ladder: `test_ladder.py`, `test_mapping.py`, `test_transitions.py`, `test_formatter.py`. Score formula: `test_scoring.py` (chance × Typical deal size; product of four Transitions; smoothed Transition). Clock: `test_clock.py`, `test_only_the_clock_reads_the_time.py` (an AST guard that no other module reads the time), and fixed-clock tests on upload, confirmation and formatting | **pass** |
 | `make test`, `make lint`, `make check-client` pass and CI is green | Each target run on main; `gh run list --branch main` | **pass**: 433 Python and 55 screen tests; lint and client check clean; CI green on 9b3eb1c |
@@ -105,24 +105,30 @@ Also in PRD #4's comments. Code comments cite them as "ruling N".
 13. A Transition with too few leads uses (made + 2p) / (made + failed + 2), with p pooled across the run's four Transitions. Scoring is refused only when no lead finished any Transition.
 14. The Backtest evaluates every lead with a known Outcome, Neglected leads included. The first hand-made result stands.
 
+## Approval
+
+The user approved phase 1 on 2026-10-01, with three rulings, carried out in the close-out pull request:
+
+1. **Calibration slope.** Kept as built: the slope is fitted over individual leads, and deciles are only how calibration is shown. The 0.8 to 1.2 range applies to synthetic, public and real data alike. Decision 0005 is amended to say so.
+2. **Outcome rules.** A later Stage after Lost reopens the lead, and Won is final for now; `ladder.py` cites this. What happens to a won deal later cancelled or refunded is START_HERE open decision 4, to be settled in phase 2.
+3. **Repair code deleted.** The test data on Railway and locally was wiped, so the code that handled data from earlier in the phase went: re-formatting a mapping confirmed before formatting existed, training's check for a confirmed mapping without formatting, leads files without column facts, runs without a Backtest, and models without `any_given`. Migration 0006 makes `uploaded_file.column_facts` and `training_run.backtest_key` required.
+
 ## Still open
 
+Settled at approval (see above): the calibration slope method (decision 0005, amended), the Outcome rules (`ladder.py`, START_HERE open decision 4) and the repair code (deleted, migration 0006).
+
 Decisions for the user:
-- **Calibration slope method.** Decision 0005 says "calibration slope within 0.8 to 1.2 *by decile*". The code fits the slope lead by lead and uses groups only for the chart, so the two could disagree on pass or fail. It was left as built rather than changed after a fail was seen. Please confirm the method, and whether 0005's synthetic-data slope range also applies to real data, as the PRD assumed. Decision 0005 should then be amended to say so.
-- **Outcome rules not covered by any decision.** Won is final (a Lost after Won is ignored), and a later Stage after Lost reopens the lead. Please confirm.
 - **Neglected leads in the Backtest (ruling 14).** The model's chance assumes a Contact attempt, so grading it against never-contacted losses may make Emva look over-confident. This is a known risk, kept by your ruling.
-- **Code that repairs data from earlier in this phase.** Mappings confirmed before formatting existed, runs trained before Backtests were kept, and models stored before `any_given`. The only such data is test data on Railway and locally. If it can be thrown away, this code can go.
 - **Phase 2 already listed:** deal size stated on the form entering the score (the scored lead stated 18,500 but 12,000 was used); a lead's country used only to read its phone, never as a score input (decision 0008).
 
 Smaller items:
-- `mapping_api.py` does several jobs: drafts, confirmation, formatting, deletion and repair. Worth splitting when phase 2 touches it.
+- `mapping_api.py` does several jobs: drafts, confirmation, formatting and deletion. Worth splitting when phase 2 touches it.
 - Storage errors are answered three ways (409 upload again, 503 try again, 200 with "results unavailable"), and upload errors can still surface as 500.
 - The data-source choices on the upload form now read "on hand-made test data", the label form, which reads oddly as a choice.
 - GBP stays on the single-country currency list although a few British territories also use it. NOK, MAD, TRY, ILS, ZAR, INR, CHF, AUD, NZD, DKK, EUR and USD are left out.
 - IP-address lookup for a phone's country is issue [#18](https://github.com/dsj-emva/emva-app/issues/18), outside phase 1.
 - CI starts Postgres and object storage with docker compose rather than GitHub service containers. The effect is the same.
 - The browser check sent files from a script into the screen's file input, not through the OS picker.
-- Railway holds the check advertisers ("Deploy check", "Phase 1 check (Railway)", "Phase 1 final check").
 
 ## New decisions or words
 
