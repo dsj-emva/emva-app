@@ -124,7 +124,7 @@ class Backtest(BaseModel):
     slope: float | None = Field(description="Null when it cannot be fitted on the leads scored")
     comparison: Comparison | None = Field(description="Null when no lead was scored")
     auc: float | None = Field(description="Null unless both won and lost leads were scored")
-    checks: tuple[Check, Check]
+    checks: tuple[Check, ...]
 
     @computed_field(description="Whether every check of the Trust gate passed")
     @property

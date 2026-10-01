@@ -261,10 +261,7 @@ export interface components {
              */
             auc: number | null;
             /** Checks */
-            checks: [
-                components["schemas"]["Check"],
-                components["schemas"]["Check"]
-            ];
+            checks: components["schemas"]["Check"][];
             /** @description Null when no lead was scored */
             comparison: components["schemas"]["Comparison"] | null;
             counts: components["schemas"]["Counts"];

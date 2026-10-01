@@ -87,16 +87,9 @@
             "title": "Auc"
           },
           "checks": {
-            "maxItems": 2,
-            "minItems": 2,
-            "prefixItems": [
-              {
-                "$ref": "#/components/schemas/Check"
-              },
-              {
-                "$ref": "#/components/schemas/Check"
-              }
-            ],
+            "items": {
+              "$ref": "#/components/schemas/Check"
+            },
             "title": "Checks",
             "type": "array"
           },
