@@ -22,6 +22,7 @@ export function Scoring({ client, advertiserId }: { client: ApiClient; advertise
   const [problem, setProblem] = useState<string | null>(null)
   const [scored, setScored] = useState<ScoredLead | null>(null)
   const headingId = useId()
+  const blankId = useId()
 
   useEffect(() => {
     client
@@ -34,14 +35,9 @@ export function Scoring({ client, advertiserId }: { client: ApiClient; advertise
           return
         }
         setLoaded({ state: 'loaded', form: data })
-        // Categories start at the typical lead's value; numbers start blank.
+        // Categories start at the typical lead's choice; numbers start blank.
         setValues(
-          Object.fromEntries(
-            data.inputs.map((input) => [
-              input.column,
-              input.choices?.find((choice) => choice.label === input.typical)?.value ?? '',
-            ]),
-          ),
+          Object.fromEntries(data.inputs.map((input) => [input.column, input.typical_choice ?? ''])),
         )
       })
       .catch(() => setLoaded({ state: 'failed', problem: UNREACHABLE }))
@@ -62,6 +58,7 @@ export function Scoring({ client, advertiserId }: { client: ApiClient; advertise
         setProblem(refusal(error, response))
       }
     } catch {
+      setScored(null)
       setProblem(UNREACHABLE)
     } finally {
       setScoring(false)
@@ -94,7 +91,18 @@ export function Scoring({ client, advertiserId }: { client: ApiClient; advertise
                 />
               ))}
             </div>
-            <button type="submit" className="primary" disabled={scoring}>
+            <NotGiven
+              id={blankId}
+              columns={loaded.form.inputs
+                .map((input) => input.column)
+                .filter((column) => (values[column] ?? '') === '')}
+            />
+            <button
+              type="submit"
+              className="primary"
+              disabled={scoring}
+              aria-describedby={blankId}
+            >
               {scoring ? 'Scoring…' : 'Score this lead'}
             </button>
           </form>
@@ -107,6 +115,16 @@ export function Scoring({ client, advertiserId }: { client: ApiClient; advertise
         </>
       )}
     </section>
+  )
+}
+
+// The inputs left blank, which the service scores as not given (ruling 12), named before the
+// person scores, so a score built on blanks is no surprise.
+function NotGiven({ id, columns }: { id: string; columns: string[] }) {
+  return (
+    <p id={id} className="not-given" role="status">
+      {columns.length > 0 && `Not given, and scored as not given: ${columns.join(', ')}.`}
+    </p>
   )
 }
 
@@ -144,7 +162,7 @@ function InputField({
             onChange={(event) => change(event.target.value)}
           />
           <p id={hintId} className="muted field-hint">
-            Typical {input.typical}. Leave blank if the lead did not say.
+            Typical: {input.typical}. Leave blank if the lead did not say.
           </p>
         </>
       )}
@@ -154,17 +172,17 @@ function InputField({
 
 function Result({ scored }: { scored: ScoredLead }) {
   return (
-    <div className="score-result" aria-live="polite">
+    <div className="score-result">
       <p className="eyebrow">On {dataSourceLabel(scored.data_source).toLowerCase()}</p>
-      <dl className="score-figures">
+      <dl className="score-figures" aria-live="polite">
         <div>
           <dt>Chance of winning</dt>
           <dd className="data">{formatChance(scored.chance_of_winning)}</dd>
         </div>
         <div className="lead-score">
-          <dt>Lead score</dt>
+          <dt>Submit score</dt>
           <dd className="data">{formatNumber(scored.lead_score)}</dd>
-          <dd className="muted">A relative measure of quality, not money.</dd>
+          <dd className="muted">A Lead score: a relative measure of quality, not money.</dd>
         </div>
         <div>
           <dt>Typical deal size used</dt>
@@ -214,7 +232,7 @@ function Waterfall({ scored }: { scored: ScoredLead }) {
     {
       key: 'lead',
       name: 'This lead',
-      detail: `Lead score ${formatNumber(scored.lead_score)}`,
+      detail: `Submit score ${formatNumber(scored.lead_score)}`,
       from: 0,
       to: scored.chance_of_winning,
       kind: 'total',
@@ -242,6 +260,9 @@ function Waterfall({ scored }: { scored: ScoredLead }) {
         </li>
         <li>
           <span className="swatch" data-kind="fall" aria-hidden="true" /> Pulled it down
+        </li>
+        <li>
+          <span className="swatch" data-kind="none" aria-hidden="true" /> No change
         </li>
       </ul>
       <ol className="waterfall-rows">

@@ -750,6 +750,16 @@ tr:has(select) > * {
   width: 100%;
 }
 
+.not-given {
+  margin: 0;
+  max-width: 40rem;
+  font-weight: 500;
+}
+
+.not-given:empty {
+  display: none;
+}
+
 .field-hint {
   margin: 0;
   font-size: 0.875rem;
@@ -915,8 +925,17 @@ tr:has(select) > * {
   border-radius: 4px 0 0 4px;
 }
 
+.swatch[data-kind='none'] {
+  width: 2px;
+  border-radius: 0;
+}
+
+.swatch[data-kind='none'],
 .waterfall-bar[data-kind='none'] {
-  background: var(--color-muted);
+  background: var(--color-chart-none);
+}
+
+.waterfall-bar[data-kind='none'] {
   border-radius: 0;
 }
 

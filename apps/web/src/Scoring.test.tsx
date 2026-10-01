@@ -9,31 +9,32 @@ type ScoringForm = components['schemas']['ScoringForm']
 type ScoredLead = components['schemas']['ScoredLead']
 
 const ID = '7a1d2c3e-0000-4000-8000-000000000001'
-const RUN = '5b2e0c4f-0000-4000-8000-000000000009'
 const FORM_PATH = `/advertisers/${ID}/scoring-form`
 const SCORES = `/advertisers/${ID}/scores`
 
 const FORM: ScoringForm = {
-  training_run_id: RUN,
-  trained_at: '2026-09-15T08:30:00Z',
-  data_source: 'hand_made_test',
-  typical_deal_size: 12000,
   inputs: [
     {
       column: 'Trip Type',
       kind: 'category',
       typical: 'Safari',
+      typical_choice: 'Safari',
       choices: [
         { value: 'Safari', label: 'Safari' },
         { value: 'Honeymoon', label: 'Honeymoon' },
       ],
     },
-    { column: 'Budget (GBP)', kind: 'number', typical: '9,250', choices: null },
+    {
+      column: 'Budget (GBP)',
+      kind: 'number',
+      typical: '9,250',
+      typical_choice: null,
+      choices: null,
+    },
   ],
 }
 
 const SCORED: ScoredLead = {
-  training_run_id: RUN,
   data_source: 'hand_made_test',
   chance_of_winning: 0.125,
   typical_deal_size: 12000,
@@ -79,8 +80,47 @@ describe('Scoring', () => {
     const budget = screen.getByRole('spinbutton', { name: 'Budget (GBP)' })
     expect(budget).toHaveValue(null)
     expect(budget).toHaveAccessibleDescription(
-      'Typical 9,250. Leave blank if the lead did not say.',
+      'Typical: 9,250. Leave blank if the lead did not say.',
     )
+  })
+
+  it('starts each category at the typical choice by its value, not its label', async () => {
+    const labelled: ScoringForm = {
+      inputs: [
+        {
+          column: 'Enquiry Channel',
+          kind: 'category',
+          typical: 'Web form',
+          typical_choice: 'web',
+          choices: [
+            { value: 'phone', label: 'By phone' },
+            { value: 'web', label: 'Through the web form' },
+          ],
+        },
+      ],
+    }
+    const service = fakeService({ [`GET ${FORM_PATH}`]: () => Response.json(labelled) })
+    renderScoring(service.client)
+
+    const channel = await screen.findByRole('combobox', { name: 'Enquiry Channel' })
+    expect(channel).toHaveValue('web')
+  })
+
+  it('says before scoring which inputs are blank and will count as not given', async () => {
+    const service = fakeService({ [`GET ${FORM_PATH}`]: () => Response.json(FORM) })
+    renderScoring(service.client)
+
+    const button = await screen.findByRole('button', { name: 'Score this lead' })
+    expect(button).toHaveAccessibleDescription(
+      'Not given, and scored as not given: Budget (GBP).',
+    )
+
+    fireEvent.change(screen.getByRole('spinbutton', { name: 'Budget (GBP)' }), {
+      target: { value: '9000' },
+    })
+
+    expect(button).not.toHaveAccessibleDescription()
+    expect(screen.queryByText(/scored as not given/)).not.toBeInTheDocument()
   })
 
   it('scores the lead and shows its chance, Lead score, deal size and explanation', async () => {
@@ -101,8 +141,10 @@ describe('Scoring', () => {
 
     const figures = within(document.querySelector<HTMLElement>('.score-figures')!)
     expect(figures.getByText('Chance of winning').nextSibling).toHaveTextContent('12.5%')
-    expect(figures.getByText('Lead score').nextSibling).toHaveTextContent('1,500')
-    expect(screen.getByText('A relative measure of quality, not money.')).toBeInTheDocument()
+    expect(figures.getByText('Submit score').nextSibling).toHaveTextContent('1,500')
+    expect(
+      figures.getByText('A Lead score: a relative measure of quality, not money.'),
+    ).toBeInTheDocument()
     expect(figures.getByText('Typical deal size used').nextSibling).toHaveTextContent('12,000')
     expect(screen.getByText('On hand-made test data')).toBeInTheDocument()
 
@@ -114,7 +156,7 @@ describe('Scoring', () => {
       'Typical leadEvery number at its training mean, every category at its most common value20%',
       'Trip TypeSafari → Honeymoon−5 pts',
       'Budget (GBP)9,250 → not given−2.5 pts',
-      'This leadLead score 1,50012.5%',
+      'This leadSubmit score 1,50012.5%',
     ])
   })
 
@@ -152,6 +194,25 @@ describe('Scoring', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(detail)
     expect(screen.queryByRole('figure')).not.toBeInTheDocument()
+  })
+
+  it('clears the last score when the next lead is refused', async () => {
+    const detail = '“Trip Type” is “Cruise”, which no training lead had.'
+    let answers = 0
+    const service = fakeService({
+      [`GET ${FORM_PATH}`]: () => Response.json(FORM),
+      [`POST ${SCORES}`]: () =>
+        answers++ === 0 ? Response.json(SCORED) : Response.json({ detail }, { status: 400 }),
+    })
+    renderScoring(service.client)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Score this lead' }))
+    await screen.findByRole('figure', { name: /Score explanation/ })
+    fireEvent.click(screen.getByRole('button', { name: 'Score this lead' }))
+
+    expect(await screen.findByRole('alert')).toHaveTextContent(detail)
+    expect(screen.queryByRole('figure')).not.toBeInTheDocument()
+    expect(screen.queryByText('Submit score')).not.toBeInTheDocument()
   })
 
   it('says why there is no form before a training run', async () => {

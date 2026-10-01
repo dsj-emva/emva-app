@@ -4,6 +4,8 @@
   --color-black: #0b0b0b;
   --color-grey: #5c5c5c;
   --color-grey-light: #a3a3a3;
+  /* Between grey and grey-light: clears 3:1 on both white and black. */
+  --color-grey-mid: #7a7a7a;
   --color-grey-pale: #ececea;
   --color-grey-deep: #1c1c1c;
   --color-white: #ffffff;
@@ -21,7 +23,8 @@
      down. Up and down also differ by sign and position, never by colour alone. */
   --color-chart-total: var(--color-text);
   --color-chart-rise: var(--color-orange);
-  --color-chart-fall: var(--color-grey);
+  --color-chart-fall: var(--color-grey-mid);
+  --color-chart-none: var(--color-text);
   --color-chart-track: var(--color-surface);
 
   --font-sans: 'Fira Sans', system-ui, sans-serif;
@@ -43,7 +46,6 @@
     --color-muted: var(--color-grey-light);
     --color-rule: var(--color-grey-pale);
     --color-rule-soft: var(--color-grey);
-    --color-chart-fall: var(--color-grey-light);
   }
 }
 
@@ -54,7 +56,6 @@
   --color-muted: var(--color-grey-light);
   --color-rule: var(--color-grey-pale);
   --color-rule-soft: var(--color-grey);
-  --color-chart-fall: var(--color-grey-light);
 }
 
 body {
