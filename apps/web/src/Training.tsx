@@ -1,6 +1,7 @@
 import type { ApiClient, components } from '@emva/api-client'
 import { useEffect, useId, useState } from 'react'
 
+import { BacktestResults } from './BacktestResults.tsx'
 import { Scoring } from './Scoring.tsx'
 import { refusal, UNREACHABLE } from './service-errors.ts'
 
@@ -106,6 +107,16 @@ export function Training({
           {loaded.training.latest && (
             <>
               <Transitions transitions={loaded.training.latest.transitions} />
+              {loaded.training.latest.backtest ? (
+                <BacktestResults
+                  backtest={loaded.training.latest.backtest}
+                  dataSource={loaded.training.latest.data_source}
+                />
+              ) : (
+                <p className="muted">
+                  This run was trained before Backtests were kept. Train again to see its results.
+                </p>
+              )}
               <Scoring
                 key={loaded.training.latest.id}
                 client={client}

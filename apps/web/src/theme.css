@@ -1,6 +1,8 @@
 /* Emva palette: orange, grey, black, white. Screens use these tokens, never raw colours. */
 :root {
   --color-orange: #f26b1d;
+  /* A step darker, for chart marks on the dark surface (the orange is too light there). */
+  --color-orange-deep: #e0611a;
   --color-black: #0b0b0b;
   --color-grey: #5c5c5c;
   --color-grey-light: #a3a3a3;
@@ -26,6 +28,10 @@
   --color-chart-fall: var(--color-grey-mid);
   --color-chart-none: var(--color-text);
   --color-chart-track: var(--color-surface);
+  /* Charts: the data mark, recessive gridlines, and the reference a mark is read against. */
+  --color-chart-mark: var(--color-orange);
+  --color-chart-grid: var(--color-grey-pale);
+  --color-chart-reference: var(--color-grey-light);
 
   --font-sans: 'Fira Sans', system-ui, sans-serif;
   --font-data: 'Fira Code', ui-monospace, monospace;
@@ -46,6 +52,9 @@
     --color-muted: var(--color-grey-light);
     --color-rule: var(--color-grey-pale);
     --color-rule-soft: var(--color-grey);
+    --color-chart-mark: var(--color-orange-deep);
+    --color-chart-grid: var(--color-grey-deep);
+    --color-chart-reference: var(--color-grey);
   }
 }
 
@@ -56,6 +65,9 @@
   --color-muted: var(--color-grey-light);
   --color-rule: var(--color-grey-pale);
   --color-rule-soft: var(--color-grey);
+  --color-chart-mark: var(--color-orange-deep);
+  --color-chart-grid: var(--color-grey-deep);
+  --color-chart-reference: var(--color-grey);
 }
 
 body {

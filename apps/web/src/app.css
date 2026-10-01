@@ -1030,3 +1030,231 @@ tr:has(select) > * {
     transition: none !important;
   }
 }
+
+/* Backtest results */
+
+.results {
+  display: grid;
+  gap: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: 2px solid var(--color-rule);
+}
+
+.results-head {
+  display: grid;
+  gap: var(--space-1);
+}
+
+.results h3 {
+  margin: 0;
+  font-size: 1.5rem;
+}
+
+.results p {
+  margin: 0;
+}
+
+.source-label {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.trust-gate {
+  display: grid;
+  gap: var(--space-2);
+}
+
+.gate-verdict {
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
+.checks {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.checks li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--space-2);
+}
+
+.mark {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-1) var(--space-2);
+  font-size: 0.875rem;
+  font-weight: 700;
+  vertical-align: middle;
+}
+
+.mark.pass {
+  background: var(--color-accent);
+  color: var(--color-on-accent);
+}
+
+.mark.fail {
+  border: 2px solid var(--color-rule);
+  color: var(--color-text);
+}
+
+.results-grid {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.results-side {
+  display: grid;
+  align-content: start;
+  gap: var(--space-4);
+}
+
+.figure {
+  display: grid;
+  align-content: start;
+  gap: var(--space-2);
+  margin: 0;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-rule-soft);
+}
+
+.figure figcaption,
+.results caption {
+  padding-bottom: var(--space-1);
+  font-weight: 700;
+  text-align: left;
+}
+
+.figure-value {
+  font-size: 2rem;
+  font-weight: 500;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+
+.figure .muted,
+.results .table-scroll > .muted {
+  font-size: 0.875rem;
+}
+
+.calibration-chart {
+  width: 100%;
+  max-width: 26rem;
+  height: auto;
+}
+
+.calibration-chart .grid {
+  stroke: var(--color-chart-grid);
+  stroke-width: 1;
+}
+
+.calibration-chart .axis {
+  stroke: var(--color-rule-soft);
+  stroke-width: 1;
+}
+
+.calibration-chart .reference,
+.interval .zero {
+  stroke: var(--color-chart-reference);
+  stroke-width: 1.5;
+}
+
+.calibration-chart .tick,
+.interval .tick,
+.calibration-chart .reference-label {
+  font-family: var(--font-data);
+  font-size: 11px;
+  fill: var(--color-muted);
+}
+
+.calibration-chart .axis-title {
+  font-size: 12px;
+  fill: var(--color-text);
+}
+
+.calibration-chart .point,
+.interval .point {
+  fill: var(--color-chart-mark);
+  stroke: var(--color-background);
+  stroke-width: 2;
+}
+
+.calibration-chart .point:hover,
+.calibration-chart .point:focus-visible {
+  outline: none;
+  stroke: var(--color-text);
+}
+
+.interval {
+  width: 100%;
+  max-width: 20rem;
+  height: auto;
+}
+
+.interval .range {
+  stroke: var(--color-chart-mark);
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.briers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.briers dt {
+  font-size: 0.75rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--color-muted);
+}
+
+.briers dd {
+  margin: 0;
+}
+
+.backtest-counts {
+  max-width: 40rem;
+}
+
+.backtest-counts th {
+  font-weight: 500;
+  white-space: normal;
+}
+
+.backtest-counts .total th,
+.backtest-counts .total td {
+  font-weight: 700;
+  border-bottom: 2px solid var(--color-rule);
+}
+
+.rules summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.rules ul {
+  max-width: 40rem;
+  margin: var(--space-2) 0 0;
+  padding-left: var(--space-3);
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+@media (min-width: 768px) {
+  .results-grid {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}
