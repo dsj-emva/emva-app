@@ -7,9 +7,11 @@ from the lead's own country, or failing that a currency of exactly one country; 
 digits as written are hashed and flagged as having no country found.
 """
 
+import phonenumbers
 import pytest
 
 from emva_api.personal_data import (
+    SINGLE_COUNTRY_CURRENCIES,
     HashedPhone,
     hashed_email,
     hashed_identifier,
@@ -96,6 +98,32 @@ def test_without_a_country_a_currency_of_exactly_one_country_gives_its_region(cu
     assert phone_region("", currency) == "GB"
     assert phone_region("", "KES") == "KE"
     assert phone_region("", "UGX") == "UG"
+
+
+@pytest.mark.parametrize(
+    ("currency", "region"),
+    [("PLN", "PL"), ("BRL", "BR"), ("KRW", "KR"), ("NGN", "NG"), ("SAR", "SA"), ("pen", "PE")],
+)
+def test_more_currencies_of_exactly_one_country_give_its_region(currency: str, region: str):
+    assert phone_region("", currency) == region
+
+
+def test_a_phone_is_read_in_the_region_its_currency_gives():
+    region = phone_region("", "PLN")
+
+    assert hashed_phone("512 345 678", region) == hashed_phone("+48 512 345 678", None)
+    assert hashed_phone("512 345 678", region).country_found
+
+
+def test_every_single_country_currency_gives_a_region_phones_can_be_read_in():
+    assert set(SINGLE_COUNTRY_CURRENCIES.values()) <= phonenumbers.SUPPORTED_REGIONS
+
+
+# Each is legal tender beyond one country or territory: NOK in Svalbard and Jan Mayen, MAD in
+# Western Sahara, TRY in Northern Cyprus, ILS in Palestine.
+@pytest.mark.parametrize("currency", ["NOK", "MAD", "TRY", "ILS"])
+def test_a_currency_also_used_in_another_territory_decides_nothing(currency: str):
+    assert phone_region("", currency) is None
 
 
 @pytest.mark.parametrize(

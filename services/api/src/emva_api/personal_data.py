@@ -19,18 +19,41 @@ from dataclasses import dataclass
 import phonenumbers
 from phonenumbers.geodata.locale import LOCALE_DATA
 
-# Currencies used by exactly one country (ruling 10). A currency several countries use (EUR,
-# USD, XOF, AUD...) is not here, and says nothing about a lead's country.
+# Currencies used by exactly one country (ruling 10). A currency several countries or territories
+# use is not here, and says nothing about a lead's country: EUR, USD, XOF and AUD, say, and also NOK
+# (Svalbard and Jan Mayen), MAD (Western Sahara), TRY (Northern Cyprus) and ILS (Palestine).
 SINGLE_COUNTRY_CURRENCIES: dict[str, str] = {
     "AED": "AE",
+    "ARS": "AR",
+    "BRL": "BR",
     "CAD": "CA",
+    "CLP": "CL",
+    "COP": "CO",
+    "CZK": "CZ",
+    "EGP": "EG",
     "GBP": "GB",
+    "GHS": "GH",
+    "HUF": "HU",
+    "IDR": "ID",
     "JPY": "JP",
     "KES": "KE",
+    "KRW": "KR",
+    "KWD": "KW",
+    "MXN": "MX",
+    "MYR": "MY",
+    "NGN": "NG",
+    "PEN": "PE",
+    "PHP": "PH",
+    "PLN": "PL",
+    "QAR": "QA",
     "RWF": "RW",
+    "SAR": "SA",
     "SEK": "SE",
+    "THB": "TH",
     "TZS": "TZ",
     "UGX": "UG",
+    "VND": "VN",
+    "ZMW": "ZM",
 }
 
 # Names a country column commonly holds that are not the country's English name or ISO code.
