@@ -158,11 +158,14 @@ _Avoid_: hotel bookings
 
 **Prohibited input**:
 Something the **Lead score** may never be learned from: a protected trait (age, gender, ethnicity, religion,
-disability) or a near-proxy for one (precise postcode, name-based inference). Listed per **Industry profile**.
+disability), any mention of pregnancy or sexual orientation, or a near-proxy for a protected trait or for national
+origin (precise postcode, name-based inference; country of residence, phone country code, enquiry language). The
+ages of the people a lead names are a prohibited input, not an **Intent signal**. Listed per **Industry profile**.
 
 **Intent signal**:
-What a lead says about the purchase itself (budget, property value, cover amount, nights, luxury level, urgency,
-how specific the enquiry is). Always allowed, even where it correlates with a protected trait.
+What a lead says about the purchase itself (budget, property value, cover amount, nights, number of adults and
+of children, luxury level, urgency, how specific the enquiry is). Always allowed, even where it correlates with a
+protected trait.
 
 **Advertiser history**:
 One advertiser's own past **Leads** with their **Stages** and **Outcomes**: what a new lead is compared
