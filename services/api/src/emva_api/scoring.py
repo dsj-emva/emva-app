@@ -18,12 +18,16 @@ from dataclasses import replace
 
 from pydantic import BaseModel, Field, computed_field
 
-from emva_api.features import Refused
 from emva_api.formatter import FormattedLead
 from emva_api.mapping import ColumnKind
 from emva_api.model import Model
 
 NOT_GIVEN = "not given"
+
+
+class NotLearned(Exception):
+    """The Mapping's inputs are not the ones the model learned from; the message says why. A
+    mismatch of the advertiser's Mapping and model, whatever the lead."""
 
 
 class Step(BaseModel):
@@ -58,9 +62,10 @@ def score(
     typical_deal_size: float,
 ) -> Score:
     """The lead's Submit score and Score explanation, its inputs walked in the Mapping's order
-    and read as the kinds it gives them; Refused when the model cannot score it."""
+    and read as the kinds it gives them; NotLearned when they are not the model's, Refused when
+    the model cannot score the lead."""
+    check_inputs(model, inputs)
     numbers, categories = model.features.typical()
-    _check_inputs(inputs, numbers, categories)
     chance = model.chance_of_winning(lead)
     current = replace(lead, numbers=numbers, categories=categories)
     typical_chance = before = model.chance_of_winning(current)
@@ -93,24 +98,21 @@ def score(
     )
 
 
-def _check_inputs(
-    inputs: Mapping[str, ColumnKind],
-    numbers: Mapping[str, object],
-    categories: Mapping[str, object],
-) -> None:
-    """The Mapping's inputs are exactly the model's, each of the same kind."""
+def check_inputs(model: Model, inputs: Mapping[str, ColumnKind]) -> None:
+    """The Mapping's inputs are exactly the model's, each of the same kind; NotLearned if not."""
+    numbers, categories = model.features.typical()
     learned = {column: ColumnKind.NUMBER for column in numbers} | {
         column: ColumnKind.CATEGORY for column in categories
     }
     for column, kind in inputs.items():
         if learned.get(column) is not kind:
-            raise Refused(
+            raise NotLearned(
                 f"“{column}” is not an input the latest Training run learned from as a {kind}. "
                 "Train again."
             )
     for column in learned:
         if column not in inputs:
-            raise Refused(
+            raise NotLearned(
                 f"“{column}” is an input of the latest Training run but not of the Mapping. "
                 "Train again."
             )

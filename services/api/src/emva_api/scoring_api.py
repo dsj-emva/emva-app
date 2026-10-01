@@ -6,8 +6,9 @@ were, and scored by `scoring.score` with that run's model and the advertiser's T
 Nothing about it is stored. It carries no personal data: the form has no such column.
 
 A refusal about the lead (an input missing, unreadable or unseen in training) is a bad request;
-one about the advertiser's state (no Training run, or one from which no chance can be known) is
-a conflict, whatever the lead.
+one about the advertiser's state (no Training run, one from which no chance can be known, or a
+Mapping whose inputs are not the ones the latest Training run learned from) is a conflict,
+whatever the lead.
 """
 
 import uuid
@@ -32,7 +33,7 @@ from emva_api.mapping import ColumnKind, Mapping
 from emva_api.model import Model, NoChance
 from emva_api.object_store import ObjectStore
 from emva_api.records import DataSource
-from emva_api.scoring import NOT_GIVEN, Score, score, value_text
+from emva_api.scoring import NOT_GIVEN, NotLearned, Score, check_inputs, score, value_text
 from emva_api.training_runs import STORAGE_FAILED, latest_run
 
 router = APIRouter()
@@ -44,7 +45,8 @@ ENTERED_LEAD = "entered on the scoring screen"
 NOT_SCORABLE = {
     status.HTTP_409_CONFLICT: {
         "model": Problem,
-        "description": "No Training run yet, or none from which a chance can be known",
+        "description": "No Training run yet, none from which a chance can be known, or a "
+        "Mapping whose inputs are not the ones it learned from",
     }
 }
 REFUSED = {
@@ -101,8 +103,6 @@ def get_scoring_form(advertiser_id: uuid.UUID, session: SessionDep, store: Store
     inputs = []
     for column, kind in mapping.leads.inputs.items():
         if kind is ColumnKind.NUMBER:
-            if column not in numbers:
-                _not_learned(column, kind)
             inputs.append(
                 ScoringInput(
                     column=column,
@@ -113,8 +113,6 @@ def get_scoring_form(advertiser_id: uuid.UUID, session: SessionDep, store: Store
                 )
             )
         else:
-            if column not in categories:
-                _not_learned(column, kind)
             inputs.append(
                 ScoringInput(
                     column=column,
@@ -182,15 +180,12 @@ def _latest(
     if latest is None or advertiser.mapping is None:
         raise HTTPException(status.HTTP_409_CONFLICT, NO_TRAINING_RUN)
     _, model = latest
-    return advertiser, model, Mapping.model_validate(advertiser.mapping.content)
-
-
-def _not_learned(column: str, kind: ColumnKind) -> NoReturn:
-    raise HTTPException(
-        status.HTTP_409_CONFLICT,
-        f"“{column}” is not an input the latest Training run learned from as a {kind}. "
-        "Train again.",
-    )
+    mapping = Mapping.model_validate(advertiser.mapping.content)
+    try:
+        check_inputs(model, mapping.leads.inputs)
+    except NotLearned as problem:
+        raise HTTPException(status.HTTP_409_CONFLICT, str(problem)) from problem
+    return advertiser, model, mapping
 
 
 def _refuse(detail: str) -> NoReturn:

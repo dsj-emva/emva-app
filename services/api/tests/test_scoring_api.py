@@ -166,6 +166,29 @@ def test_scoring_is_refused_before_a_training_run(client: TestClient):
     refused(client, advertiser, A_LEAD, 409, because)
 
 
+def test_a_mapping_the_latest_training_run_did_not_learn_from_is_a_conflict_on_form_and_score(
+    client: TestClient, settings: Settings, trained: str
+):
+    """A mismatch between the Mapping and the model is the advertiser's state, not the lead's."""
+    engine = create_engine(settings.database_url)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE mapping SET content = jsonb_set(content::jsonb, "
+                "'{leads,inputs,Trip Type}', '\"number\"')::json WHERE advertiser_id = :id"
+            ),
+            {"id": trained},
+        )
+    engine.dispose()
+    because = (
+        "“Trip Type” is not an input the latest Training run learned from as a number. Train again."
+    )
+
+    form = scoring_form(client, trained)
+    assert (form.status_code, form.json()["detail"]) == (409, because)
+    refused(client, trained, {**A_LEAD, "Trip Type": "3"}, 409, because)
+
+
 def hand_made_rows() -> list[dict[str, str]]:
     return list(csv.DictReader(io.StringIO((HAND_MADE / "leads.csv").read_text())))
 
