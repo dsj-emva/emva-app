@@ -2,6 +2,7 @@ import type { ApiClient, components } from '@emva/api-client'
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react'
 
 import { refusal, UNREACHABLE } from './service-errors.ts'
+import { Training } from './Training.tsx'
 import { FILES } from './uploaded-files.ts'
 
 type Advertiser = components['schemas']['Advertiser']
@@ -187,6 +188,7 @@ export function ReviewStep({
           rawFilesDeleted={review.still_to_do === null}
         />
       )}
+      <Training client={client} advertiserId={advertiser.id} formattedAt={review.formatted_at} />
       <fieldset className="mapping" disabled={confirmed}>
         <legend className="visually-hidden">Mapping</legend>
         {advertiser.leads_file && (

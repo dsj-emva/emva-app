@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from emva_api import mapping_api, uploads
+from emva_api import mapping_api, training_api, uploads
 from emva_api.clock import Clock, SystemClock
 from emva_api.object_store import ObjectStore
 from emva_api.settings import Settings
@@ -38,6 +38,7 @@ def create_app(settings: Settings, clock: Clock) -> FastAPI:
 
     app.include_router(uploads.router)
     app.include_router(mapping_api.router)
+    app.include_router(training_api.router)
     return app
 
 

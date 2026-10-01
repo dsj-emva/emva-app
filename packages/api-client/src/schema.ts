@@ -123,6 +123,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/advertisers/{advertiser_id}/training": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Training
+         * @description Whether training can run now, and the latest Training run.
+         */
+        get: operations["getTraining"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/advertisers/{advertiser_id}/training-runs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Train Model
+         * @description Train on every formatted lead and stage event as of now, and keep the Training run.
+         */
+        post: operations["train"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -470,6 +510,85 @@ export interface components {
             unreadable: components["schemas"]["UnreadableRows"][];
             /** Won */
             won: number;
+        };
+        /** Training */
+        Training: {
+            /** @description The latest Training run; null before one */
+            latest: components["schemas"]["TrainingRunView"] | null;
+            /**
+             * Not Trainable Because
+             * @description Why not, while it cannot train
+             */
+            not_trainable_because: string | null;
+            /**
+             * Rule
+             * @description When a Transition's model is learned
+             */
+            rule: string;
+            /** Trainable */
+            trainable: boolean;
+        };
+        /** TrainingRunView */
+        TrainingRunView: {
+            /**
+             * Id
+             * Format: uuid
+             */
+            id: string;
+            /**
+             * Trained At
+             * Format: date-time
+             */
+            trained_at: string;
+            /**
+             * Transitions
+             * @description Each Transition from Contact attempted to Won, in ladder order
+             */
+            transitions: components["schemas"]["TransitionResult"][];
+        };
+        /**
+         * Transition
+         * @description A lead moving from one Stage to the next.
+         */
+        Transition: {
+            from_stage: components["schemas"]["Stage"];
+            /** Name */
+            readonly name: string;
+            to_stage: components["schemas"]["Stage"];
+        };
+        /** TransitionResult */
+        TransitionResult: {
+            /**
+             * Failed
+             * @description Leads lost at it
+             */
+            failed: number;
+            /**
+             * Fitted
+             * @description Whether its logistic regression was fitted
+             */
+            fitted: boolean;
+            /**
+             * Made
+             * @description Leads that made it
+             */
+            made: number;
+            /**
+             * Smoothed Rate
+             * @description (made + 2p) / (made + failed + 2), p pooled across the run's Transitions: every lead's chance when too few to learn. Null only when no lead finished any.
+             */
+            smoothed_rate: number | null;
+            transition: components["schemas"]["Transition"];
+            /**
+             * Unfinished
+             * @description Leads that faced it but neither made nor failed it yet; left out
+             */
+            unfinished: number;
+            /**
+             * Verdict
+             * @description What to say of it: learned, or too few to learn
+             */
+            verdict: string;
         };
         /**
          * UnreadableRows
@@ -874,6 +993,113 @@ export interface operations {
                 };
             };
             /** @description Not confirmed, or confirmed but the raw files not all deleted yet */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    getTraining: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                advertiser_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Training"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    train: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                advertiser_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Training"];
+                };
+            };
+            /** @description Not Found */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description The mapping is not confirmed, its data not formatted, or it marks no input */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Service Unavailable */
             503: {
                 headers: {
                     [name: string]: unknown;
