@@ -860,6 +860,18 @@
           "mapping": {
             "$ref": "#/components/schemas/Mapping"
           },
+          "personal_data": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What formatting did with personal data, and whether the raw files are deleted yet; null before formatting",
+            "title": "Personal Data"
+          },
           "problems": {
             "description": "Why it cannot be confirmed yet; empty once it can",
             "items": {
@@ -902,6 +914,7 @@
           "confirmed_at",
           "formatted_at",
           "formatting",
+          "personal_data",
           "still_to_do",
           "problems",
           "crm_stages",
@@ -1297,6 +1310,11 @@
             ],
             "description": "The latest Training run; null before one"
           },
+          "left_out": {
+            "description": "Which leads each Transition leaves out",
+            "title": "Left Out",
+            "type": "string"
+          },
           "not_trainable_because": {
             "anyOf": [
               {
@@ -1323,6 +1341,7 @@
           "trainable",
           "not_trainable_because",
           "rule",
+          "left_out",
           "latest"
         ],
         "title": "Training",

@@ -106,7 +106,10 @@ export function Training({
           )}
           {loaded.training.latest && (
             <>
-              <Transitions transitions={loaded.training.latest.transitions} />
+              <Transitions
+                transitions={loaded.training.latest.transitions}
+                leftOut={loaded.training.left_out}
+              />
               {loaded.training.latest.backtest ? (
                 <BacktestResults
                   backtest={loaded.training.latest.backtest}
@@ -128,7 +131,13 @@ export function Training({
   )
 }
 
-function Transitions({ transitions }: { transitions: TransitionResult[] }) {
+function Transitions({
+  transitions,
+  leftOut,
+}: {
+  transitions: TransitionResult[]
+  leftOut: string
+}) {
   return (
     <div className="table-scroll">
       <table>
@@ -167,10 +176,7 @@ function Transitions({ transitions }: { transitions: TransitionResult[] }) {
           ))}
         </tbody>
       </table>
-      <p className="muted">
-        Left out: leads that reached the transition but have neither made nor failed it yet.
-        Neglected leads, never attempted, are left out of every transition.
-      </p>
+      <p className="muted">{leftOut}</p>
     </div>
   )
 }

@@ -34,7 +34,7 @@ from emva_api.mapping_api import NOT_FORMATTED_YET
 from emva_api.model import RULE, Model, train
 from emva_api.object_store import MissingObject, ObjectStore
 from emva_api.training_runs import STORAGE_FAILED, latest_run
-from emva_api.transitions import Transition
+from emva_api.transitions import LEFT_OUT, Transition
 
 router = APIRouter()
 
@@ -80,6 +80,7 @@ class Training(BaseModel):
     trainable: bool
     not_trainable_because: str | None = Field(description="Why not, while it cannot train")
     rule: str = Field(description="When a Transition's model is learned")
+    left_out: str = Field(description="Which leads each Transition leaves out")
     latest: TrainingRunView | None = Field(description="The latest Training run; null before one")
 
 
@@ -164,7 +165,11 @@ def _not_trainable_because(advertiser: records.Advertiser) -> str | None:
 def _training(advertiser: records.Advertiser, latest: TrainingRunView | None) -> Training:
     because = _not_trainable_because(advertiser)
     return Training(
-        trainable=because is None, not_trainable_because=because, rule=RULE, latest=latest
+        trainable=because is None,
+        not_trainable_because=because,
+        rule=RULE,
+        left_out=LEFT_OUT,
+        latest=latest,
     )
 
 

@@ -13,6 +13,7 @@ const ID = '7a1d2c3e-0000-4000-8000-000000000001'
 const TRAINING = `/advertisers/${ID}/training`
 const RUNS = `/advertisers/${ID}/training-runs`
 const RULE = 'A transition’s model is learned only from at least 10 leads that made it.'
+const LEFT_OUT = 'Left out: leads that have neither made nor failed it yet.'
 
 const RUN: TrainingRunView = {
   id: '5b2e0c4f-0000-4000-8000-000000000009',
@@ -50,6 +51,7 @@ const TRAINABLE: TrainingState = {
   trainable: true,
   not_trainable_because: null,
   rule: RULE,
+  left_out: LEFT_OUT,
   latest: null,
 }
 
@@ -90,6 +92,7 @@ describe('Training', () => {
       ['Contact attempted → Engaged', '67', '16', '4', 'Learned'],
       ['Proposal → Won', '18', '7', '4', 'Too few to learn: smoothed rate 72%'],
     ])
+    expect(screen.getByText(LEFT_OUT)).toBeInTheDocument()
     expect(service.sentTo(`POST ${RUNS}`)).toHaveLength(1)
     expect(screen.getByRole('button', { name: 'Train again' })).toBeEnabled()
   })

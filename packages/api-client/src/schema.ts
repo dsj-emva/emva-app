@@ -652,6 +652,11 @@ export interface components {
             leads_roles: components["schemas"]["LeadsRoleChoice"][];
             mapping: components["schemas"]["Mapping"];
             /**
+             * Personal Data
+             * @description What formatting did with personal data, and whether the raw files are deleted yet; null before formatting
+             */
+            personal_data: string | null;
+            /**
              * Problems
              * @description Why it cannot be confirmed yet; empty once it can
              */
@@ -848,6 +853,11 @@ export interface components {
         Training: {
             /** @description The latest Training run; null before one */
             latest: components["schemas"]["TrainingRunView"] | null;
+            /**
+             * Left Out
+             * @description Which leads each Transition leaves out
+             */
+            left_out: string;
             /**
              * Not Trainable Because
              * @description Why not, while it cannot train

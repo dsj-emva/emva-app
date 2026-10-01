@@ -49,6 +49,11 @@ from emva_api.records import FileKind
 
 router = APIRouter()
 
+# What the Formatter does with personal data (decision 0010).
+PERSONAL_DATA_REMOVED = (
+    "Names were removed; identifiers, emails and phones scrambled; every unmarked column dropped"
+)
+
 # Said by the review screen and by training, of a mapping confirmed before its data was formatted.
 NOT_FORMATTED_YET = (
     "The mapping is confirmed but its data is not formatted yet. Confirm again to format it."
@@ -111,6 +116,10 @@ class MappingReview(BaseModel):
     confirmed_at: datetime | None = Field(description="When a person confirmed it; null in draft")
     formatted_at: datetime | None = Field(description="When its data was formatted")
     formatting: Summary | None = Field(description="What formatting made of the files")
+    personal_data: str | None = Field(
+        description="What formatting did with personal data, and whether the raw files are "
+        "deleted yet; null before formatting"
+    )
     still_to_do: str | None = Field(
         description="What confirming still has to do, when it was interrupted; confirming again "
         "does it. Null in draft and once confirming is done."
@@ -346,6 +355,7 @@ def _confirmed_review(
         confirmed_at=record.confirmed_at,
         formatting=formatting,
         still_to_do=still_to_do,
+        raw_files_deleted=not _raw_uploads(advertiser),
     )
 
 
@@ -362,12 +372,18 @@ def _review(
     confirmed_at: datetime | None = None,
     formatting: records.Formatting | None = None,
     still_to_do: str | None = None,
+    raw_files_deleted: bool = False,
 ) -> MappingReview:
+    personal_data = None
+    if formatting is not None:
+        deleted = "; and the raw files deleted." if raw_files_deleted else "."
+        personal_data = PERSONAL_DATA_REMOVED + deleted
     return MappingReview(
         mapping=draft,
         confirmed_at=confirmed_at and confirmed_at.astimezone(UTC),
         formatted_at=formatting and formatting.formatted_at.astimezone(UTC),
         formatting=formatting and Summary.model_validate(formatting.summary),
+        personal_data=personal_data,
         still_to_do=still_to_do,
         problems=mapping.problems(draft, shape.files()),
         crm_stages=shape.crm_stages,
