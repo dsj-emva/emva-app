@@ -2,8 +2,10 @@ import type { ApiClient, components } from '@emva/api-client'
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react'
 
 import { refusal, UNREACHABLE } from './service-errors.ts'
+import { FILES } from './uploaded-files.ts'
 
 type Advertiser = components['schemas']['Advertiser']
+type FormattingSummary = components['schemas']['FormattingSummary']
 type Column = components['schemas']['Column']
 type ColumnKind = components['schemas']['ColumnKind']
 type FileKind = components['schemas']['FileKind']
@@ -161,12 +163,14 @@ export function ReviewStep({
   return (
     <div className="review">
       {confirmed && <Confirmed at={review.confirmed_at!} />}
+      {review.formatting && <Formatted summary={review.formatting} />}
       <fieldset className="mapping" disabled={confirmed}>
         <legend className="visually-hidden">Mapping</legend>
         {advertiser.leads_file && (
           <FileColumns
             client={client}
             advertiserId={advertiser.id}
+            rawDeleted={confirmed}
             kind="leads"
             label="Leads file"
             file={advertiser.leads_file}
@@ -199,6 +203,7 @@ export function ReviewStep({
           <FileColumns
             client={client}
             advertiserId={advertiser.id}
+            rawDeleted={confirmed}
             kind="stage-history"
             label="Stage-history file"
             file={advertiser.stage_history_file}
@@ -247,6 +252,72 @@ function Confirmed({ at }: { at: string }) {
     </section>
   )
 }
+
+function Formatted({ summary }: { summary: FormattingSummary }) {
+  const headingId = useId()
+  const countsId = useId()
+  const counts = [
+    { label: 'Leads', count: summary.lead_count },
+    { label: 'Won', count: summary.won },
+    { label: 'Lost', count: summary.lost },
+    { label: 'Unfinished', count: summary.unfinished },
+    { label: 'Never reached Contact attempted', count: summary.never_reached_contact_attempted },
+  ]
+  return (
+    <section className="formatted" aria-labelledby={headingId}>
+      <h3 id={headingId}>What was formatted</h3>
+      <p className="muted">
+        Names were removed, emails and phones scrambled, every unmarked column dropped, and the raw
+        files deleted.
+      </p>
+      <p id={countsId} className="visually-hidden">
+        Leads by outcome
+      </p>
+      <ul className="outcome-counts" aria-labelledby={countsId}>
+        {counts.map(({ label, count }) => (
+          <li key={label}>
+            <span className="count data">{count}</span>
+            <span className="count-label">{label}</span>
+          </li>
+        ))}
+      </ul>
+      {summary.unreadable_rows.length === 0 ? (
+        <p>Every row could be read.</p>
+      ) : (
+        <div className="table-scroll">
+          <table>
+            <caption>Rows that could not be read</caption>
+            <thead>
+              <tr>
+                <th scope="col">File</th>
+                <th scope="col" className="number">
+                  Row
+                </th>
+                <th scope="col">Lead</th>
+                <th scope="col">Why</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.unreadable_rows.map((row) => (
+                <tr key={`${row.file} ${row.row}`}>
+                  <td>{FILE_LABELS[row.file]}</td>
+                  <td className="number data">{row.row}</td>
+                  <td className="data">{row.lead}</td>
+                  <td>{row.reason}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  )
+}
+
+const FILE_LABELS = Object.fromEntries(FILES.map(({ kind, label }) => [kind, label])) as Record<
+  FileKind,
+  string
+>
 
 function RoleChoices({
   legend,
@@ -336,6 +407,7 @@ type Columns =
 function FileColumns({
   client,
   advertiserId,
+  rawDeleted,
   kind,
   label,
   file,
@@ -345,6 +417,9 @@ function FileColumns({
 }: {
   client: ApiClient
   advertiserId: string
+  // Once the mapping is confirmed the raw file is formatted and deleted, so only its column
+  // names remain; its example values are not asked for.
+  rawDeleted: boolean
   kind: FileKind
   label: string
   file: FileProfile
@@ -352,9 +427,13 @@ function FileColumns({
   columnControl?: { heading: string; control: (column: string) => ReactNode }
   children?: ReactNode
 }) {
-  const [columns, setColumns] = useState<Columns>({ state: 'loading' })
+  const [fetched, setColumns] = useState<Columns>({ state: 'loading' })
+  const columns: Columns = rawDeleted
+    ? { state: 'listed', columns: file.column_names.map((name) => ({ name, examples: [] })) }
+    : fetched
 
   useEffect(() => {
+    if (rawDeleted) return
     client
       .GET('/advertisers/{advertiser_id}/files/{kind}/columns', {
         params: { path: { advertiser_id: advertiserId, kind } },
@@ -367,7 +446,7 @@ function FileColumns({
         ),
       )
       .catch(() => setColumns({ state: 'failed', problem: UNREACHABLE }))
-  }, [client, advertiserId, kind])
+  }, [client, advertiserId, kind, rawDeleted])
 
   return (
     <section className="file-review" aria-label={`${label}: ${file.file_name}`}>
@@ -384,13 +463,18 @@ function FileColumns({
           {columns.problem}
         </p>
       )}
+      {rawDeleted && (
+        <p className="muted">
+          The raw files were deleted once they were formatted, so their example values are gone.
+        </p>
+      )}
       {columns.state === 'listed' && (
         <div className="table-scroll">
           <table>
             <thead>
               <tr>
                 <th scope="col">Column</th>
-                <th scope="col">Example values</th>
+                {!rawDeleted && <th scope="col">Example values</th>}
                 {columnControl && <th scope="col">{columnControl.heading}</th>}
               </tr>
             </thead>
@@ -398,19 +482,21 @@ function FileColumns({
               {columns.columns.map((column) => (
                 <tr key={column.name}>
                   <th scope="row">{column.name}</th>
-                  <td>
-                    {column.examples.length === 0 ? (
-                      <span className="muted">No values</span>
-                    ) : (
-                      <ul className="examples">
-                        {column.examples.map((example) => (
-                          <li key={example} className="data">
-                            {example}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </td>
+                  {!rawDeleted && (
+                    <td>
+                      {column.examples.length === 0 ? (
+                        <span className="muted">No values</span>
+                      ) : (
+                        <ul className="examples">
+                          {column.examples.map((example) => (
+                            <li key={example} className="data">
+                              {example}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </td>
+                  )}
                   {columnControl && <td>{columnControl.control(column.name)}</td>}
                 </tr>
               ))}

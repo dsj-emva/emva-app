@@ -7,6 +7,7 @@ import { CHOICES } from './test-mapping.ts'
 import { fakeService } from './test-service.ts'
 
 type Advertiser = components['schemas']['Advertiser']
+type FormattingSummary = components['schemas']['FormattingSummary']
 type Mapping = components['schemas']['Mapping']
 type MappingReview = components['schemas']['MappingReview']
 
@@ -54,10 +55,24 @@ const CRM_STAGES = [
   { name: 'Closed won', row_count: 19 },
 ]
 
+const FORMATTED: FormattingSummary = {
+  formatted_at: '2026-09-20T16:30:00Z',
+  lead_count: 100,
+  won: 18,
+  lost: 58,
+  unfinished: 24,
+  never_reached_contact_attempted: 13,
+  unreadable_rows: [
+    { file: 'leads', row: 101, lead: 'L-1101', reason: 'The submission time cannot be read.' },
+    { file: 'stage-history', row: 417, lead: null, reason: 'No lead identifier.' },
+  ],
+}
+
 function review(mapping: Mapping, rest: Partial<MappingReview> = {}): MappingReview {
   return {
     mapping,
     confirmed_at: null,
+    formatting: null,
     problems: ['Enter the typical deal size.'],
     crm_stages: mapping.stage_history.crm_stage ? CRM_STAGES : [],
     ...CHOICES,
@@ -230,6 +245,65 @@ describe('ReviewStep', () => {
     expect(screen.getByLabelText('Typical deal size')).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Confirm the mapping' })).not.toBeInTheDocument()
     expect(onConfirmed).toHaveBeenCalledOnce()
+  })
+
+  it('shows the summary of what was formatted, exactly as the service returns it', async () => {
+    const confirmed = review(EMPTY, {
+      problems: [],
+      confirmed_at: '2026-09-20T16:30:00Z',
+      formatting: FORMATTED,
+    })
+    const service = fakeService({
+      [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json([]),
+      [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json([]),
+      [`GET ${ADVERTISER}/mapping`]: () => Response.json(review(EMPTY, { problems: [] })),
+      [`POST ${ADVERTISER}/mapping/confirmation`]: () => Response.json(confirmed),
+    })
+    renderReview(service.client)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm the mapping' }))
+
+    const summary = await region('What was formatted')
+    const counts = summary.getByRole('list', { name: 'Leads by outcome' })
+    expect(
+      within(counts)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual([
+      '100Leads',
+      '18Won',
+      '58Lost',
+      '24Unfinished',
+      '13Never reached Contact attempted',
+    ])
+    const rows = summary.getByRole('table', { name: 'Rows that could not be read' })
+    expect(
+      within(rows)
+        .getAllByRole('row')
+        .slice(1)
+        .map((row) => row.textContent),
+    ).toEqual([
+      'Leads file101L-1101The submission time cannot be read.',
+      'Stage-history file417No lead identifier.',
+    ])
+  })
+
+  it('once confirmed, lists the columns without asking for the deleted raw files', async () => {
+    const confirmed = review(EMPTY, {
+      problems: [],
+      confirmed_at: '2026-09-20T16:30:00Z',
+      formatting: FORMATTED,
+    })
+    const service = fakeService({ [`GET ${ADVERTISER}/mapping`]: () => Response.json(confirmed) })
+    renderReview(service.client)
+
+    const leads = await region(LEADS)
+
+    expect(leads.getByRole('row', { name: /Trip Type/ })).toBeInTheDocument()
+    expect(leads.getByText(/raw files were deleted/)).toBeInTheDocument()
+    expect(service.sentTo(`GET ${ADVERTISER}/files/leads/columns`)).toHaveLength(0)
+    expect(service.sentTo(`GET ${ADVERTISER}/files/stage-history/columns`)).toHaveLength(0)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
   })
 
   it('shows why the service refused to confirm', async () => {
