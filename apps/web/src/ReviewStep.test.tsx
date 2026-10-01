@@ -7,6 +7,7 @@ import { CHOICES } from './test-mapping.ts'
 import { fakeService } from './test-service.ts'
 
 type Advertiser = components['schemas']['Advertiser']
+type Summary = components['schemas']['Summary']
 type Mapping = components['schemas']['Mapping']
 type MappingReview = components['schemas']['MappingReview']
 
@@ -23,6 +24,7 @@ const BOTH_UPLOADED: Advertiser = {
     uploaded_at: '2026-09-15T08:45:00Z',
     row_count: 101,
     column_names: ['Lead ID', 'Created Date', 'Email', 'Trip Type'],
+    raw_kept: true,
   },
   stage_history_file: {
     kind: 'stage-history',
@@ -30,9 +32,17 @@ const BOTH_UPLOADED: Advertiser = {
     uploaded_at: '2026-09-15T08:46:00Z',
     row_count: 418,
     column_names: ['Lead ID', 'Stage', 'Changed At', 'Deal Value'],
+    raw_kept: true,
   },
   review_available: true,
   mapping_confirmed_at: null,
+}
+
+const FORMATTED_AND_DELETED: Advertiser = {
+  ...BOTH_UPLOADED,
+  leads_file: { ...BOTH_UPLOADED.leads_file!, raw_kept: false },
+  stage_history_file: { ...BOTH_UPLOADED.stage_history_file!, raw_kept: false },
+  mapping_confirmed_at: '2026-09-20T16:30:00Z',
 }
 
 const EMPTY: Mapping = {
@@ -42,11 +52,15 @@ const EMPTY: Mapping = {
     name: null,
     email: null,
     phone: null,
+    country: null,
+    currency: null,
     inputs: {},
   },
   stage_history: { lead_id: null, crm_stage: null, changed_at: null, deal_value: null },
   crm_stages: {},
   typical_deal_size: null,
+  date_order: null,
+  time_zone: 'UTC',
 }
 
 const CRM_STAGES = [
@@ -54,10 +68,36 @@ const CRM_STAGES = [
   { name: 'Closed won', row_count: 19 },
 ]
 
+const FORMATTED: Summary = {
+  lead_count: 100,
+  won: 18,
+  lost: 58,
+  no_outcome_yet: 24,
+  neglected: 13,
+  phones_without_country: 2,
+  unreadable: [
+    {
+      file: 'leads',
+      reason: 'The submission time cannot be read.',
+      count: 1,
+      first_rows: [101],
+    },
+    {
+      file: 'stage-history',
+      reason: 'The lead is not in the leads file.',
+      count: 12,
+      first_rows: [2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+    },
+  ],
+}
+
 function review(mapping: Mapping, rest: Partial<MappingReview> = {}): MappingReview {
   return {
     mapping,
     confirmed_at: null,
+    formatted_at: null,
+    formatting: null,
+    still_to_do: null,
     problems: ['Enter the typical deal size.'],
     crm_stages: mapping.stage_history.crm_stage ? CRM_STAGES : [],
     ...CHOICES,
@@ -105,8 +145,12 @@ async function region(name: string) {
 const LEADS = 'Leads file: leads.csv'
 const HISTORY = 'Stage-history file: stage_history.csv'
 
-function renderReview(client: ReturnType<typeof fakeService>['client'], onConfirmed = () => {}) {
-  render(<ReviewStep client={client} advertiser={BOTH_UPLOADED} onConfirmed={onConfirmed} />)
+function renderReview(
+  client: ReturnType<typeof fakeService>['client'],
+  onChanged = () => {},
+  advertiser: Advertiser = BOTH_UPLOADED,
+) {
+  render(<ReviewStep client={client} advertiser={advertiser} onChanged={onChanged} />)
 }
 
 function choose(control: HTMLElement, value: string) {
@@ -198,7 +242,7 @@ describe('ReviewStep', () => {
     ]
     render(
       <ReviewStep
-        onConfirmed={() => {}}
+        onChanged={() => {}}
         client={draftService(review(EMPTY, { problems: reasons })).client}
         advertiser={BOTH_UPLOADED}
       />,
@@ -211,14 +255,14 @@ describe('ReviewStep', () => {
 
   it('confirms as a separate act and then shows the mapping confirmed and when', async () => {
     const confirmed = review(EMPTY, { problems: [], confirmed_at: '2026-09-20T16:30:00Z' })
-    const onConfirmed = vi.fn()
+    const onChanged = vi.fn()
     const routes = fakeService({
       [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json([]),
       [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json([]),
       [`GET ${ADVERTISER}/mapping`]: () => Response.json(review(EMPTY, { problems: [] })),
       [`POST ${ADVERTISER}/mapping/confirmation`]: () => Response.json(confirmed),
     })
-    renderReview(routes.client, onConfirmed)
+    renderReview(routes.client, onChanged)
     expect(routes.sentTo(`POST ${ADVERTISER}/mapping/confirmation`)).toHaveLength(0)
 
     fireEvent.click(await screen.findByRole('button', { name: 'Confirm the mapping' }))
@@ -229,7 +273,169 @@ describe('ReviewStep', () => {
     expect(status).toHaveTextContent('can no longer be changed')
     expect(screen.getByLabelText('Typical deal size')).toBeDisabled()
     expect(screen.queryByRole('button', { name: 'Confirm the mapping' })).not.toBeInTheDocument()
-    expect(onConfirmed).toHaveBeenCalledOnce()
+    expect(onChanged).toHaveBeenCalledOnce()
+  })
+
+  it('shows the summary of what was formatted, exactly as the service returns it', async () => {
+    const confirmed = review(EMPTY, {
+      problems: [],
+      confirmed_at: '2026-09-20T16:30:00Z',
+      formatting: FORMATTED,
+    })
+    const service = fakeService({
+      [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json([]),
+      [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json([]),
+      [`GET ${ADVERTISER}/mapping`]: () => Response.json(review(EMPTY, { problems: [] })),
+      [`POST ${ADVERTISER}/mapping/confirmation`]: () => Response.json(confirmed),
+    })
+    renderReview(service.client)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm the mapping' }))
+
+    const summary = await region('What was formatted')
+    const counts = summary.getByRole('list', { name: 'Leads by outcome' })
+    expect(
+      within(counts)
+        .getAllByRole('listitem')
+        .map((item) => item.textContent),
+    ).toEqual([
+      '100Leads',
+      '18Won',
+      '58Lost',
+      '24No outcome yet',
+      '13Neglected leads',
+      '2Phones without a country',
+    ])
+    const rows = summary.getByRole('table', { name: 'Rows that could not be read' })
+    expect(
+      within(rows)
+        .getAllByRole('row')
+        .slice(1)
+        .map((row) => row.textContent),
+    ).toEqual([
+      'Leads fileThe submission time cannot be read.1101',
+      'Stage-history fileThe lead is not in the leads file.122, 3, 4, 5, 6, 7, 8, 9, 10, 11…',
+    ])
+    expect(summary.getByText(/the raw files deleted/)).toBeInTheDocument()
+  })
+
+  it('names the ladder stages in the summary as the service names them', async () => {
+    const named = CHOICES.stages_and_lost.map((choice) =>
+      choice.value === 'won' ? { ...choice, name: 'Won (booked)' } : choice,
+    )
+    const confirmed = review(EMPTY, {
+      confirmed_at: '2026-09-20T16:30:00Z',
+      formatting: FORMATTED,
+      stages_and_lost: named,
+    })
+    const service = fakeService({ [`GET ${ADVERTISER}/mapping`]: () => Response.json(confirmed) })
+    renderReview(service.client, () => {}, FORMATTED_AND_DELETED)
+
+    const counts = (await region('What was formatted')).getByRole('list', {
+      name: 'Leads by outcome',
+    })
+
+    expect(within(counts).getByText('Won (booked)')).toBeInTheDocument()
+  })
+
+  it('once the raw files are deleted, lists the columns without asking for them', async () => {
+    const confirmed = review(EMPTY, {
+      problems: [],
+      confirmed_at: '2026-09-20T16:30:00Z',
+      formatting: FORMATTED,
+    })
+    const service = fakeService({ [`GET ${ADVERTISER}/mapping`]: () => Response.json(confirmed) })
+    renderReview(service.client, () => {}, FORMATTED_AND_DELETED)
+
+    const leads = await region(LEADS)
+
+    expect(leads.getByRole('row', { name: /Trip Type/ })).toBeInTheDocument()
+    expect(leads.getByText(/raw file was deleted/)).toBeInTheDocument()
+    expect(service.sentTo(`GET ${ADVERTISER}/files/leads/columns`)).toHaveLength(0)
+    expect(service.sentTo(`GET ${ADVERTISER}/files/stage-history/columns`)).toHaveLength(0)
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('says what confirming still has to do, never that the raw files are deleted', async () => {
+    const stillToDo =
+      'The data is formatted, but the raw files are not all deleted yet. Confirm again to delete them.'
+    const interrupted = review(EMPTY, {
+      confirmed_at: '2026-09-20T16:30:00Z',
+      formatting: FORMATTED,
+      still_to_do: stillToDo,
+    })
+    const done = { ...interrupted, still_to_do: null }
+    const onChanged = vi.fn()
+    const service = fakeService({
+      [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json([]),
+      [`GET ${ADVERTISER}/mapping`]: () => Response.json(interrupted),
+      [`POST ${ADVERTISER}/mapping/confirmation`]: () => Response.json(done),
+    })
+    const partly: Advertiser = {
+      ...FORMATTED_AND_DELETED,
+      stage_history_file: { ...BOTH_UPLOADED.stage_history_file!, raw_kept: true },
+    }
+    renderReview(service.client, onChanged, partly)
+
+    const notFinished = await region('Confirming is not finished')
+    expect(notFinished.getByText(stillToDo)).toBeInTheDocument()
+    expect(screen.queryByText(/the raw files deleted/)).not.toBeInTheDocument()
+    expect(service.sentTo(`GET ${ADVERTISER}/files/leads/columns`)).toHaveLength(0)
+    expect(service.sentTo(`GET ${ADVERTISER}/files/stage-history/columns`)).toHaveLength(1)
+
+    fireEvent.click(notFinished.getByRole('button', { name: 'Finish confirming' }))
+
+    await waitFor(() =>
+      expect(screen.queryByRole('region', { name: 'Confirming is not finished' })).toBeNull(),
+    )
+    expect(service.sentTo(`POST ${ADVERTISER}/mapping/confirmation`)).toHaveLength(1)
+    expect(onChanged).toHaveBeenCalled()
+  })
+
+  it('after a refused confirmation, shows the mapping as the service now has it', async () => {
+    let confirmedNow = false
+    const service = fakeService({
+      [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json([]),
+      [`GET ${ADVERTISER}/files/stage-history/columns`]: () => Response.json([]),
+      [`GET ${ADVERTISER}/mapping`]: () =>
+        Response.json(
+          confirmedNow
+            ? review(EMPTY, {
+                confirmed_at: '2026-09-20T16:30:00Z',
+                formatting: FORMATTED,
+                still_to_do: 'Confirm again to delete them.',
+              })
+            : review(EMPTY, { problems: [] }),
+        ),
+      [`POST ${ADVERTISER}/mapping/confirmation`]: () => {
+        confirmedNow = true
+        return Response.json({ detail: 'The raw files could not all be deleted yet.' }, { status: 503 })
+      },
+    })
+    const onChanged = vi.fn()
+    renderReview(service.client, onChanged)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm the mapping' }))
+
+    expect(await screen.findByRole('status', { name: 'Mapping confirmed' })).toBeInTheDocument()
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'The raw files could not all be deleted yet.',
+    )
+    expect(onChanged).toHaveBeenCalled()
+  })
+
+  it('saves the date order and time zone the person picks', async () => {
+    const service = draftService()
+    renderReview(service.client)
+
+    choose(await screen.findByLabelText('Date order'), 'day_month_year')
+    await waitFor(async () =>
+      expect((await lastSaved(service)).date_order).toBe('day_month_year'),
+    )
+    fireEvent.change(screen.getByLabelText('Time zone'), { target: { value: 'Europe/London' } })
+
+    await waitFor(async () => expect((await lastSaved(service)).time_zone).toBe('Europe/London'))
+    expect(screen.getByRole('option', { name: 'Day-month-year (05/01/2024)' })).toBeInTheDocument()
   })
 
   it('shows why the service refused to confirm', async () => {

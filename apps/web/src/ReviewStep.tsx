@@ -2,8 +2,13 @@ import type { ApiClient, components } from '@emva/api-client'
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react'
 
 import { refusal, UNREACHABLE } from './service-errors.ts'
+import { FILES } from './uploaded-files.ts'
 
 type Advertiser = components['schemas']['Advertiser']
+type Summary = components['schemas']['Summary']
+type StageOrLostChoice = components['schemas']['StageOrLostChoice']
+type DateOrder = components['schemas']['DateOrder']
+type DateOrderChoice = components['schemas']['DateOrderChoice']
 type Column = components['schemas']['Column']
 type ColumnKind = components['schemas']['ColumnKind']
 type FileKind = components['schemas']['FileKind']
@@ -27,11 +32,12 @@ type Saving = { state: 'saved' } | { state: 'saving' } | { state: 'failed'; prob
 export function ReviewStep({
   client,
   advertiser,
-  onConfirmed,
+  onChanged,
 }: {
   client: ApiClient
   advertiser: Advertiser
-  onConfirmed: () => void
+  // Called after confirming, which changes the advertiser (its files, once deleted).
+  onChanged: () => void
 }) {
   const [loaded, setLoaded] = useState<Loaded>({ state: 'loading' })
   const [saving, setSaving] = useState<Saving>({ state: 'saved' })
@@ -110,6 +116,8 @@ export function ReviewStep({
     typing.current = { flush, timer: setTimeout(flush, TYPING_PAUSE_MS) }
   }
 
+  // Confirming may stop part-way (formatted, but a raw file not yet deleted), so whatever it
+  // answers, the mapping and the advertiser are read again as the service now has them.
   async function confirm() {
     setConfirming(true)
     setConfirmProblem(null)
@@ -118,14 +126,17 @@ export function ReviewStep({
         '/advertisers/{advertiser_id}/mapping/confirmation',
         path,
       )
-      if (data) {
-        setLoaded({ state: 'loaded', review: data, mapping: data.mapping })
-        onConfirmed()
-      } else setConfirmProblem(refusal(error, response))
+      if (data) setLoaded({ state: 'loaded', review: data, mapping: data.mapping })
+      else {
+        setConfirmProblem(refusal(error, response))
+        const now = await client.GET('/advertisers/{advertiser_id}/mapping', path)
+        if (now.data) setLoaded({ state: 'loaded', review: now.data, mapping: now.data.mapping })
+      }
     } catch {
       setConfirmProblem(UNREACHABLE)
     } finally {
       setConfirming(false)
+      onChanged()
     }
   }
 
@@ -161,12 +172,28 @@ export function ReviewStep({
   return (
     <div className="review">
       {confirmed && <Confirmed at={review.confirmed_at!} />}
+      {review.still_to_do && (
+        <StillToDo
+          what={review.still_to_do}
+          confirming={confirming}
+          problem={confirmProblem}
+          finish={confirm}
+        />
+      )}
+      {review.formatting && (
+        <Formatted
+          summary={review.formatting}
+          stages={review.stages_and_lost}
+          rawFilesDeleted={review.still_to_do === null}
+        />
+      )}
       <fieldset className="mapping" disabled={confirmed}>
         <legend className="visually-hidden">Mapping</legend>
         {advertiser.leads_file && (
           <FileColumns
             client={client}
             advertiserId={advertiser.id}
+            rawDeleted={!advertiser.leads_file.raw_kept}
             kind="leads"
             label="Leads file"
             file={advertiser.leads_file}
@@ -199,6 +226,7 @@ export function ReviewStep({
           <FileColumns
             client={client}
             advertiserId={advertiser.id}
+            rawDeleted={!advertiser.stage_history_file.raw_kept}
             kind="stage-history"
             label="Stage-history file"
             file={advertiser.stage_history_file}
@@ -218,6 +246,13 @@ export function ReviewStep({
             <CrmStages review={review} placed={placed} place={place} />
           </FileColumns>
         )}
+        <HowTimesAreWritten
+          orders={review.date_orders}
+          order={mapping.date_order ?? null}
+          zone={mapping.time_zone ?? 'UTC'}
+          chooseOrder={(order) => change({ ...mapping, date_order: order })}
+          chooseZone={(zone) => change({ ...mapping, time_zone: zone }, { typed: true })}
+        />
         <TypicalDealSize
           size={mapping.typical_deal_size ?? null}
           choose={(size) => change({ ...mapping, typical_deal_size: size }, { typed: true })}
@@ -247,6 +282,114 @@ function Confirmed({ at }: { at: string }) {
     </section>
   )
 }
+
+function StillToDo({
+  what,
+  confirming,
+  problem,
+  finish,
+}: {
+  what: string
+  confirming: boolean
+  problem: string | null
+  finish: () => void
+}) {
+  const headingId = useId()
+  return (
+    <section className="still-to-do" aria-labelledby={headingId}>
+      <h3 id={headingId}>Confirming is not finished</h3>
+      <p>{what}</p>
+      <button type="button" className="primary" disabled={confirming} onClick={finish}>
+        {confirming ? 'Finishing…' : 'Finish confirming'}
+      </button>
+      {problem && (
+        <p className="problem" role="alert">
+          {problem}
+        </p>
+      )}
+    </section>
+  )
+}
+
+function Formatted({
+  summary,
+  stages,
+  rawFilesDeleted,
+}: {
+  summary: Summary
+  stages: StageOrLostChoice[]
+  rawFilesDeleted: boolean
+}) {
+  const headingId = useId()
+  const countsId = useId()
+  const nameOf = (value: StageOrLostChoice['value']) =>
+    stages.find((stage) => stage.value === value)?.name ?? value
+  const counts = [
+    { label: 'Leads', count: summary.lead_count },
+    { label: nameOf('won'), count: summary.won },
+    { label: nameOf('lost'), count: summary.lost },
+    { label: 'No outcome yet', count: summary.no_outcome_yet },
+    { label: 'Neglected leads', count: summary.neglected },
+    { label: 'Phones without a country', count: summary.phones_without_country },
+  ]
+  return (
+    <section className="formatted" aria-labelledby={headingId}>
+      <h3 id={headingId}>What was formatted</h3>
+      <p className="muted">
+        Names were removed; identifiers, emails and phones scrambled; every unmarked column
+        dropped{rawFilesDeleted ? '; and the raw files deleted.' : '.'}
+      </p>
+      <p id={countsId} className="visually-hidden">
+        Leads by outcome
+      </p>
+      <ul className="outcome-counts" aria-labelledby={countsId}>
+        {counts.map(({ label, count }) => (
+          <li key={label}>
+            <span className="count data">{count}</span>
+            <span className="count-label">{label}</span>
+          </li>
+        ))}
+      </ul>
+      {summary.unreadable.length === 0 ? (
+        <p>Every row could be read.</p>
+      ) : (
+        <div className="table-scroll">
+          <table>
+            <caption>Rows that could not be read</caption>
+            <thead>
+              <tr>
+                <th scope="col">File</th>
+                <th scope="col">Why</th>
+                <th scope="col" className="number">
+                  Rows
+                </th>
+                <th scope="col">First rows</th>
+              </tr>
+            </thead>
+            <tbody>
+              {summary.unreadable.map((rows) => (
+                <tr key={`${rows.file} ${rows.reason}`}>
+                  <td>{FILE_LABELS[rows.file]}</td>
+                  <td>{rows.reason}</td>
+                  <td className="number data">{rows.count}</td>
+                  <td className="data">
+                    {rows.first_rows.join(', ')}
+                    {rows.count > rows.first_rows.length && '…'}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  )
+}
+
+const FILE_LABELS = Object.fromEntries(FILES.map(({ kind, label }) => [kind, label])) as Record<
+  FileKind,
+  string
+>
 
 function RoleChoices({
   legend,
@@ -336,6 +479,7 @@ type Columns =
 function FileColumns({
   client,
   advertiserId,
+  rawDeleted,
   kind,
   label,
   file,
@@ -345,6 +489,9 @@ function FileColumns({
 }: {
   client: ApiClient
   advertiserId: string
+  // Once the mapping is confirmed the raw file is formatted and deleted, so only its column
+  // names remain; its example values are not asked for.
+  rawDeleted: boolean
   kind: FileKind
   label: string
   file: FileProfile
@@ -352,9 +499,13 @@ function FileColumns({
   columnControl?: { heading: string; control: (column: string) => ReactNode }
   children?: ReactNode
 }) {
-  const [columns, setColumns] = useState<Columns>({ state: 'loading' })
+  const [fetched, setColumns] = useState<Columns>({ state: 'loading' })
+  const columns: Columns = rawDeleted
+    ? { state: 'listed', columns: file.column_names.map((name) => ({ name, examples: [] })) }
+    : fetched
 
   useEffect(() => {
+    if (rawDeleted) return
     client
       .GET('/advertisers/{advertiser_id}/files/{kind}/columns', {
         params: { path: { advertiser_id: advertiserId, kind } },
@@ -367,7 +518,7 @@ function FileColumns({
         ),
       )
       .catch(() => setColumns({ state: 'failed', problem: UNREACHABLE }))
-  }, [client, advertiserId, kind])
+  }, [client, advertiserId, kind, rawDeleted])
 
   return (
     <section className="file-review" aria-label={`${label}: ${file.file_name}`}>
@@ -384,13 +535,18 @@ function FileColumns({
           {columns.problem}
         </p>
       )}
+      {rawDeleted && (
+        <p className="muted">
+          The raw file was deleted once it was formatted, so its example values are gone.
+        </p>
+      )}
       {columns.state === 'listed' && (
         <div className="table-scroll">
           <table>
             <thead>
               <tr>
                 <th scope="col">Column</th>
-                <th scope="col">Example values</th>
+                {!rawDeleted && <th scope="col">Example values</th>}
                 {columnControl && <th scope="col">{columnControl.heading}</th>}
               </tr>
             </thead>
@@ -398,19 +554,21 @@ function FileColumns({
               {columns.columns.map((column) => (
                 <tr key={column.name}>
                   <th scope="row">{column.name}</th>
-                  <td>
-                    {column.examples.length === 0 ? (
-                      <span className="muted">No values</span>
-                    ) : (
-                      <ul className="examples">
-                        {column.examples.map((example) => (
-                          <li key={example} className="data">
-                            {example}
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </td>
+                  {!rawDeleted && (
+                    <td>
+                      {column.examples.length === 0 ? (
+                        <span className="muted">No values</span>
+                      ) : (
+                        <ul className="examples">
+                          {column.examples.map((example) => (
+                            <li key={example} className="data">
+                              {example}
+                            </li>
+                          ))}
+                        </ul>
+                      )}
+                    </td>
+                  )}
                   {columnControl && <td>{columnControl.control(column.name)}</td>}
                 </tr>
               ))}
@@ -484,6 +642,65 @@ function CrmStages({
         </>
       )}
     </div>
+  )
+}
+
+function HowTimesAreWritten({
+  orders,
+  order,
+  zone,
+  chooseOrder,
+  chooseZone,
+}: {
+  orders: DateOrderChoice[]
+  order: DateOrder | null
+  zone: string
+  chooseOrder: (order: DateOrder | null) => void
+  chooseZone: (zone: string) => void
+}) {
+  const orderId = useId()
+  const zoneId = useId()
+  const zoneHintId = useId()
+  const [zoneText, setZoneText] = useState(zone)
+  return (
+    <fieldset className="roles times">
+      <legend>How both files write times</legend>
+      <div className="role-grid">
+        <div className="field">
+          <label htmlFor={orderId}>Date order</label>
+          <select
+            id={orderId}
+            value={order ?? ''}
+            onChange={(event) => chooseOrder((event.target.value || null) as DateOrder | null)}
+          >
+            <option value="">Not picked</option>
+            {orders.map(({ value, label }) => (
+              <option key={value} value={value}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div className="field">
+          <label htmlFor={zoneId}>Time zone</label>
+          <input
+            id={zoneId}
+            type="text"
+            autoComplete="off"
+            spellCheck={false}
+            aria-describedby={zoneHintId}
+            value={zoneText}
+            onChange={(event) => {
+              setZoneText(event.target.value)
+              chooseZone(event.target.value)
+            }}
+          />
+          <p id={zoneHintId} className="muted">
+            Times written without a zone are read in it, such as Europe/London or UTC.
+          </p>
+        </div>
+      </div>
+    </fieldset>
   )
 }
 

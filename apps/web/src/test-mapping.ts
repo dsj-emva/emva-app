@@ -5,14 +5,21 @@ type MappingReview = components['schemas']['MappingReview']
 // What the service says each column can hold and where a CRM stage can be placed.
 export const CHOICES: Pick<
   MappingReview,
-  'leads_roles' | 'stage_history_roles' | 'input_kinds' | 'stages_and_lost'
+  'leads_roles' | 'stage_history_roles' | 'input_kinds' | 'stages_and_lost' | 'date_orders'
 > = {
+  date_orders: [
+    { value: 'year_month_day', label: 'Year-month-day (2024-01-05)' },
+    { value: 'day_month_year', label: 'Day-month-year (05/01/2024)' },
+    { value: 'month_day_year', label: 'Month-day-year (01/05/2024)' },
+  ],
   leads_roles: [
     { role: 'lead_id', label: 'Lead identifier' },
     { role: 'submitted_at', label: 'Submission time' },
     { role: 'name', label: 'Name (removed)' },
     { role: 'email', label: 'Email (scrambled)' },
     { role: 'phone', label: 'Phone (scrambled)' },
+    { role: 'country', label: 'Country (reads the phone)' },
+    { role: 'currency', label: 'Currency (reads the phone)' },
   ],
   stage_history_roles: [
     { role: 'lead_id', label: 'Lead identifier' },

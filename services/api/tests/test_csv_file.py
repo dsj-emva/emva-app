@@ -1,6 +1,49 @@
 import pytest
 
-from emva_api.csv_file import ColumnProfile, UnreadableFile, count_values, profile, read_csv
+from emva_api.csv_file import (
+    ColumnFacts,
+    ColumnProfile,
+    UnreadableFile,
+    column_facts,
+    count_values,
+    profile,
+    read_csv,
+)
+
+
+def test_column_facts_count_each_columns_distinct_non_empty_values():
+    table = read_csv(b"Trip,Budget\nSafari,100\nsafari,100\nSafari,\n,200\n")
+
+    assert column_facts(table) == {
+        "Trip": ColumnFacts(distinct_values=2, looks_like_contact=False),
+        "Budget": ColumnFacts(distinct_values=2, looks_like_contact=False),
+    }
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "ada.fenwick@example.com",
+        "Call Ada on ada@example.org please",
+        "+44 7700 900101",
+        "07700 900101",
+        "ring 07700900101 after 6",
+        "(0044) 7700-900-101",
+    ],
+)
+def test_a_column_with_any_value_like_an_email_or_phone_looks_like_contact_details(value: str):
+    table = read_csv(f'Notes\nSafari\n"{value}"\n'.encode())
+
+    assert column_facts(table)["Notes"].looks_like_contact
+
+
+@pytest.mark.parametrize(
+    "value", ["Safari", "18500", "2024-01-04 09:12", "3 nights, 2 adults", "@home", "1 000 000"]
+)
+def test_ordinary_values_do_not_look_like_contact_details(value: str):
+    table = read_csv(f'Notes\n"{value}"\n'.encode())
+
+    assert not column_facts(table)["Notes"].looks_like_contact
 
 
 def test_reads_the_header_and_every_row():

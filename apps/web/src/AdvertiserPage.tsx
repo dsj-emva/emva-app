@@ -70,7 +70,7 @@ export function AdvertiserPage({ client }: { client: ApiClient }) {
               <ReviewStep
                 client={client}
                 advertiser={advertiser}
-                onConfirmed={() => {
+                onChanged={() => {
                   client
                     .GET('/advertisers/{advertiser_id}', {
                       params: { path: { advertiser_id: advertiser.id } },

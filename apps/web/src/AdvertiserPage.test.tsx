@@ -18,6 +18,7 @@ const LEADS_FILE: FileProfile = {
   uploaded_at: '2026-09-15T08:45:00Z',
   row_count: 101,
   column_names: ['Lead ID', 'Trip Type'],
+  raw_kept: true,
 }
 const STAGE_HISTORY_FILE: FileProfile = {
   kind: 'stage-history',
@@ -25,6 +26,7 @@ const STAGE_HISTORY_FILE: FileProfile = {
   uploaded_at: '2026-09-15T08:46:00Z',
   row_count: 418,
   column_names: ['Lead ID', 'Stage'],
+  raw_kept: true,
 }
 const LEADS_COLUMNS = [
   { name: 'Lead ID', examples: ['L-1001', 'L-1002', 'L-1003'] },

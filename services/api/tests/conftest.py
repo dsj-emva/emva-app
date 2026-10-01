@@ -6,6 +6,7 @@ Each test session gets its own database and bucket, so it never touches developm
 import dataclasses
 import uuid
 from collections.abc import Iterator
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -25,6 +26,24 @@ SERVICE = Path(__file__).parents[1]
 
 @pytest.fixture(scope="session")
 def settings() -> Iterator[Settings]:
+    with _own_database_and_bucket() as settings:
+        yield settings
+
+
+@pytest.fixture
+def own_settings() -> Iterator[Settings]:
+    """A database and bucket of the test's own, for a test that must see everything stored."""
+    with _own_database_and_bucket() as settings:
+        yield settings
+
+
+@pytest.fixture
+def own_bucket(own_settings: Settings):
+    return _bucket(own_settings)
+
+
+@contextmanager
+def _own_database_and_bucket() -> Iterator[Settings]:
     development = Settings.from_environment()
     run = uuid.uuid4().hex[:12]
     database = f"emva_test_{run}"

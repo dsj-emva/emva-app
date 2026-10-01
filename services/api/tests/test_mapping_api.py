@@ -25,6 +25,8 @@ COMPLETE = {
         "name": None,
         "email": "Email",
         "phone": None,
+        "country": None,
+        "currency": None,
         "inputs": {"Budget": "number"},
     },
     "stage_history": {
@@ -35,6 +37,8 @@ COMPLETE = {
     },
     "crm_stages": {"New enquiry": "submitted", "Closed won": "won"},
     "typical_deal_size": 8000.0,
+    "date_order": "year_month_day",
+    "time_zone": "UTC",
 }
 
 STAGES_AND_LOST = [
@@ -85,6 +89,8 @@ def test_a_new_mapping_is_an_empty_draft_with_everything_still_to_do(client: Tes
             "name": None,
             "email": None,
             "phone": None,
+            "country": None,
+            "currency": None,
             "inputs": {},
         },
         "stage_history": {
@@ -95,10 +101,46 @@ def test_a_new_mapping_is_an_empty_draft_with_everything_still_to_do(client: Tes
         },
         "crm_stages": {},
         "typical_deal_size": None,
+        "date_order": None,
+        "time_zone": "UTC",
     }
     assert review["confirmed_at"] is None
     assert review["crm_stages"] == []
     assert review["stages_and_lost"] == STAGES_AND_LOST
+
+
+def test_the_draft_comes_with_the_date_orders_to_pick_from(client: TestClient):
+    review = client.get(f"/advertisers/{advertiser_with_both_files(client)}/mapping").json()
+
+    assert review["date_orders"] == [
+        {"value": "year_month_day", "label": "Year-month-day (2024-01-05)"},
+        {"value": "day_month_year", "label": "Day-month-year (05/01/2024)"},
+        {"value": "month_day_year", "label": "Month-day-year (01/05/2024)"},
+    ]
+
+
+def test_a_category_input_holding_free_text_or_contact_details_is_refused(client: TestClient):
+    advertiser = client.post(
+        "/advertisers", json={"name": "Savanna Journeys", "data_source": "hand_made_test"}
+    ).json()["id"]
+    notes = [f"L{n},2026-01-02,Wants {n} nights" for n in range(30)]
+    leads = "\n".join(["Lead ID,Created,Notes", *notes, "L99,2026-01-03,Ring 07700 900101"])
+    upload(client, advertiser, "leads", leads.encode())
+    upload(client, advertiser, "stage-history", STAGE_HISTORY)
+
+    review = save(
+        client,
+        advertiser,
+        {
+            **COMPLETE,
+            "leads": {**COMPLETE["leads"], "email": None, "inputs": {"Notes": "category"}},
+        },
+    ).json()
+
+    assert (
+        "“Notes” cannot be a category input: some of its values look like email addresses or "
+        "phone numbers." in review["problems"]
+    )
 
 
 def test_the_draft_comes_with_what_each_column_can_hold(client: TestClient):
@@ -112,6 +154,8 @@ def test_the_draft_comes_with_what_each_column_can_hold(client: TestClient):
         {"role": "name", "label": "Name (removed)"},
         {"role": "email", "label": "Email (scrambled)"},
         {"role": "phone", "label": "Phone (scrambled)"},
+        {"role": "country", "label": "Country (reads the phone)"},
+        {"role": "currency", "label": "Currency (reads the phone)"},
     ]
     assert review["stage_history_roles"] == [
         {"role": "lead_id", "label": "Lead identifier"},
@@ -189,6 +233,8 @@ def test_the_reasons_it_cannot_be_confirmed_come_with_the_draft(client: TestClie
         "and an input to the score; mark it as one only.",
         "Place the CRM stage “Closed won” on the canonical ladder or on Lost.",
         "Place at least one CRM stage on Won.",
+        "“Email” cannot be a category input: some of its values look like email addresses or "
+        "phone numbers.",
         "The typical deal size must be more than zero.",
     ]
 

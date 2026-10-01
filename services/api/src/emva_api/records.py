@@ -3,10 +3,25 @@
 import enum
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
-from sqlalchemy import JSON, DateTime, Enum, ForeignKey, String, UniqueConstraint
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy import (
+    JSON,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Index,
+    String,
+    UniqueConstraint,
+    insert,
+)
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship
+
+from emva_api.ladder import STAGES_AND_LOST
+
+if TYPE_CHECKING:
+    from emva_api.formatter import Formatted
 
 
 class Base(DeclarativeBase):
@@ -42,10 +57,12 @@ class Advertiser(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     files: Mapped[list["UploadedFile"]] = relationship(back_populates="advertiser")
     mapping: Mapped["AdvertiserMapping | None"] = relationship(back_populates="advertiser")
+    formatting: Mapped["Formatting | None"] = relationship()
 
 
 class UploadedFile(Base):
-    """A raw file as uploaded; its content lives in object storage under object_key.
+    """A raw file as uploaded; its content lives in object storage under object_key until it is
+    formatted, then is deleted and object_key cleared.
 
     Only the file's shape is kept here (row count, column names); its values, which hold
     personal data, are read from object storage and never stored in Postgres.
@@ -60,10 +77,13 @@ class UploadedFile(Base):
         Enum(FileKind, name="file_kind", values_callable=_values)
     )
     file_name: Mapped[str] = mapped_column(String(255))
-    object_key: Mapped[str] = mapped_column(String(255))
+    object_key: Mapped[str | None] = mapped_column(String(255))
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     row_count: Mapped[int]
     column_names: Mapped[list[str]] = mapped_column(JSON)
+    # What each column's values are like (counts and flags, never values), read on upload;
+    # null for a file uploaded before they were kept.
+    column_facts: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     advertiser: Mapped[Advertiser] = relationship(back_populates="files")
 
 
@@ -82,3 +102,90 @@ class AdvertiserMapping(Base):
     # names with counts), so a confirmed mapping reads without the raw files.
     confirmed_against: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     advertiser: Mapped[Advertiser] = relationship(back_populates="mapping")
+
+
+class Lead(Base):
+    """A Lead as the Formatter wrote it: no name; its identifier, email and phone only as
+    hashes; and only the inputs the Mapping marks, each kept as its kind."""
+
+    __tablename__ = "lead"
+    __table_args__ = (UniqueConstraint("advertiser_id", "identifier_hash"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    advertiser_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("advertiser.id"))
+    # The hash of the lead's identifier in the advertiser's CRM, which is often its email.
+    identifier_hash: Mapped[str] = mapped_column(String(64))
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    email_hash: Mapped[str | None] = mapped_column(String(64))
+    phone_hash: Mapped[str | None] = mapped_column(String(64))
+    # False when the phone's country was not found, so its digits as written were hashed.
+    phone_country_found: Mapped[bool | None]
+    number_inputs: Mapped[dict[str, float | None]] = mapped_column(JSON)
+    category_inputs: Mapped[dict[str, str | None]] = mapped_column(JSON)
+    stage_events: Mapped[list["LeadStageEvent"]] = relationship(order_by="LeadStageEvent.at")
+
+
+class LeadStageEvent(Base):
+    """A lead reaching a Stage of the Canonical ladder, or being lost, at a time."""
+
+    __tablename__ = "stage_event"
+    __table_args__ = (Index("stage_event_lead_id", "lead_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    lead_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("lead.id"))
+    stage: Mapped[str] = mapped_column(
+        Enum(*(str(value) for value in STAGES_AND_LOST), name="stage_or_lost")
+    )
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    deal_value: Mapped[float | None] = mapped_column(Float)
+
+
+class Formatting(Base):
+    """What the Formatter made of the advertiser's files, as the screen summarises it."""
+
+    __tablename__ = "formatting"
+
+    advertiser_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("advertiser.id"), primary_key=True)
+    formatted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # The Formatter's Summary: counts of leads by Outcome, and the unreadable rows by reason.
+    summary: Mapped[dict[str, Any]] = mapped_column(JSON)
+
+
+def keep_formatted(
+    session: Session, advertiser: Advertiser, formatted: "Formatted", at: datetime
+) -> None:
+    """Add the formatted leads, their stage events and the summary, in bulk; the caller commits."""
+    leads: list[dict[str, Any]] = []
+    events: list[dict[str, Any]] = []
+    for lead in formatted.leads:
+        lead_id = uuid.uuid4()
+        leads.append(
+            {
+                "id": lead_id,
+                "advertiser_id": advertiser.id,
+                "identifier_hash": lead.identifier_hash,
+                "submitted_at": lead.submitted_at,
+                "email_hash": lead.email_hash,
+                "phone_hash": lead.phone_hash,
+                "phone_country_found": lead.phone_country_found,
+                "number_inputs": lead.numbers,
+                "category_inputs": lead.categories,
+            }
+        )
+        events += [
+            {
+                "id": uuid.uuid4(),
+                "lead_id": lead_id,
+                "stage": str(event.stage),
+                "at": event.at,
+                "deal_value": event.deal_value,
+            }
+            for event in lead.stage_events
+        ]
+    if leads:
+        session.execute(insert(Lead), leads)
+    if events:
+        session.execute(insert(LeadStageEvent), events)
+    advertiser.formatting = Formatting(
+        formatted_at=at, summary=formatted.summary.model_dump(mode="json")
+    )

@@ -8,6 +8,8 @@ from datetime import UTC, datetime
 
 import pytest
 
+from emva_api.csv_file import ColumnFacts, column_facts, read_csv
+from emva_api.dates import DateOrder
 from emva_api.ladder import LOST, Stage
 from emva_api.mapping import (
     ColumnKind,
@@ -45,6 +47,8 @@ COMPLETE = Mapping(
         "Closed lost": LOST,
     },
     typical_deal_size=8000,
+    date_order=DateOrder.DAY_MONTH_YEAR,
+    time_zone="Europe/London",
 )
 
 AT = datetime(2026, 9, 14, 10, 0, tzinfo=UTC)
@@ -78,7 +82,131 @@ def test_a_new_mapping_lists_everything_still_to_do():
         "Mark the stage-history file's column holding the lead identifier.",
         "Mark the stage-history file's column holding the CRM stage.",
         "Mark the stage-history file's column holding when the change happened.",
+        "Pick the order the files write dates in.",
         "Enter the typical deal size.",
+    ]
+
+
+# Date order and time zone
+
+
+def test_a_new_mapping_reads_times_without_a_zone_as_utc():
+    assert Mapping().time_zone == "UTC"
+
+
+def test_the_time_zone_must_be_a_real_one():
+    misspelt = COMPLETE.model_copy(update={"time_zone": "Europe/Lndon"})
+
+    assert problems(misspelt, FILES) == [
+        "“Europe/Lndon” is not a time zone; use a name such as Europe/London or UTC."
+    ]
+
+
+# The lead's country and currency, which only read its phone
+
+
+GEOGRAPHY = Files(
+    leads_columns=[*FILES.leads_columns, "Country", "Currency"],
+    stage_history_columns=FILES.stage_history_columns,
+    crm_stages=FILES.crm_stages,
+)
+
+
+def test_the_leads_country_and_currency_may_be_marked_or_left_unmarked():
+    assert problems(with_leads(country="Country", currency="Currency"), GEOGRAPHY) == []
+    assert problems(with_leads(country="Country"), GEOGRAPHY) == []
+    assert problems(COMPLETE, GEOGRAPHY) == []
+
+
+def test_the_leads_country_cannot_also_be_an_input_to_the_score():
+    found = problems(
+        with_leads(country="Country", inputs={"Country": ColumnKind.CATEGORY}), GEOGRAPHY
+    )
+
+    assert found == [
+        "The leads file's column “Country” is marked as the lead's country and an input to the "
+        "score; mark it as one only."
+    ]
+
+
+def test_the_leads_country_and_currency_are_two_columns():
+    found = problems(with_leads(country="Country", currency="Country"), GEOGRAPHY)
+
+    assert found == [
+        "The leads file's column “Country” is marked as the lead's country and the lead's "
+        "currency; mark it as one only."
+    ]
+
+
+# Category inputs carry neither contact details nor free text (decision 0010)
+
+
+def files_with(facts: ColumnFacts, row_count: int = 100) -> Files:
+    return Files(
+        leads_columns=FILES.leads_columns,
+        stage_history_columns=FILES.stage_history_columns,
+        crm_stages=FILES.crm_stages,
+        leads_row_count=row_count,
+        leads_column_facts={"Trip Type": facts, "Budget": facts},
+    )
+
+
+def test_an_input_whose_values_look_like_contact_details_is_refused_whatever_its_kind():
+    found = problems(COMPLETE, files_with(ColumnFacts(distinct_values=3, looks_like_contact=True)))
+
+    assert found == [
+        "“Trip Type” cannot be a category input: some of its values look like email addresses "
+        "or phone numbers.",
+        "“Budget” cannot be an input: some of its values look like email addresses or phone "
+        "numbers.",
+    ]
+
+
+def test_a_phone_column_cannot_pass_as_a_number_input():
+    table = read_csv(b"Lead ID,Mobile\nL1,07700900101\nL2,07700900102\n")
+    files = Files(
+        leads_columns=table.columns,
+        stage_history_columns=FILES.stage_history_columns,
+        crm_stages=FILES.crm_stages,
+        leads_row_count=table.row_count,
+        leads_column_facts=column_facts(table),
+    )
+    mobile_as_number = Mapping.model_validate(
+        {
+            **COMPLETE.model_dump(),
+            "leads": {
+                "lead_id": "Lead ID",
+                "submitted_at": "Lead ID",
+                "inputs": {"Mobile": "number"},
+            },
+        }
+    )
+
+    assert (
+        "“Mobile” cannot be an input: some of its values look like email addresses or phone "
+        "numbers." in problems(mobile_as_number, files)
+    )
+
+
+@pytest.mark.parametrize(("row_count", "distinct"), [(10, 20), (100, 25), (200, 50), (100_000, 50)])
+def test_a_category_input_may_have_a_quarter_of_the_rows_in_values_from_20_to_50(
+    row_count, distinct
+):
+    facts = ColumnFacts(distinct_values=distinct, looks_like_contact=False)
+
+    assert problems(COMPLETE, files_with(facts, row_count)) == []
+
+
+@pytest.mark.parametrize(
+    ("row_count", "distinct", "most"),
+    [(10, 21, 20), (100, 26, 25), (400, 51, 50), (100_000, 51, 50)],
+)
+def test_a_category_input_with_more_values_than_that_is_refused(row_count, distinct, most):
+    facts = ColumnFacts(distinct_values=distinct, looks_like_contact=False)
+
+    assert problems(COMPLETE, files_with(facts, row_count)) == [
+        f"“Trip Type” cannot be a category input: it has {distinct} different values, more "
+        f"than the {most} a category may have in this file."
     ]
 
 
