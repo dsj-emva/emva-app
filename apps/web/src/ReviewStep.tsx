@@ -2,6 +2,7 @@ import type { ApiClient, components } from '@emva/api-client'
 import { type ReactNode, useEffect, useId, useRef, useState } from 'react'
 
 import { refusal, UNREACHABLE } from './service-errors.ts'
+import { Training } from './Training.tsx'
 import { FILES } from './uploaded-files.ts'
 
 type Advertiser = components['schemas']['Advertiser']
@@ -150,6 +151,8 @@ export function ReviewStep({
 
   const { review, mapping } = loaded
   const confirmed = review.confirmed_at !== null
+  // Training waits for both, as the service does.
+  const formatted = confirmed && review.formatting !== null
   const leads = mapping.leads
   const history = mapping.stage_history
   const inputs = leads.inputs ?? {}
@@ -187,6 +190,7 @@ export function ReviewStep({
           rawFilesDeleted={review.still_to_do === null}
         />
       )}
+      {formatted && <Training client={client} advertiserId={advertiser.id} ready />}
       <fieldset className="mapping" disabled={confirmed}>
         <legend className="visually-hidden">Mapping</legend>
         {advertiser.leads_file && (
@@ -267,6 +271,7 @@ export function ReviewStep({
           confirm={confirm}
         />
       )}
+      {!formatted && <Training client={client} advertiserId={advertiser.id} ready={false} />}
     </div>
   )
 }

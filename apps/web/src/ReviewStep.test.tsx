@@ -276,6 +276,48 @@ describe('ReviewStep', () => {
     expect(onChanged).toHaveBeenCalledOnce()
   })
 
+  it('holds back training while the mapping is a draft', async () => {
+    renderReview(draftService().client)
+
+    const training = await region('Train the model')
+    expect(training.getByRole('button', { name: 'Train the model' })).toBeDisabled()
+  })
+
+  it('holds back training while a confirmed mapping’s data is not formatted yet', async () => {
+    const service = draftService(
+      review(EMPTY, {
+        problems: [],
+        confirmed_at: '2026-09-20T16:30:00Z',
+        still_to_do:
+          'The mapping is confirmed but its data is not formatted yet. Confirm again to format it.',
+      }),
+    )
+    renderReview(service.client)
+
+    const training = await region('Train the model')
+    expect(training.getByRole('button', { name: 'Train the model' })).toBeDisabled()
+  })
+
+  it('offers training once the mapping is confirmed and its data formatted', async () => {
+    const service = fakeService({
+      [`GET ${ADVERTISER}/mapping`]: () =>
+        Response.json(
+          review(EMPTY, {
+            problems: [],
+            confirmed_at: '2026-09-20T16:30:00Z',
+            formatted_at: '2026-09-20T16:30:00Z',
+            formatting: FORMATTED,
+          }),
+        ),
+      [`GET ${ADVERTISER}/training-runs/latest`]: () =>
+        Response.json({ detail: 'The model has not been trained yet.' }, { status: 404 }),
+    })
+    renderReview(service.client, () => {}, FORMATTED_AND_DELETED)
+
+    const training = await region('Train the model')
+    expect(await training.findByRole('button', { name: 'Train the model' })).toBeEnabled()
+  })
+
   it('shows the summary of what was formatted, exactly as the service returns it', async () => {
     const confirmed = review(EMPTY, {
       problems: [],
