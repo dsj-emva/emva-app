@@ -46,9 +46,22 @@ def test_a_new_advertiser_has_no_files_and_its_review_is_unavailable(client: Tes
     advertiser = client.get(f"/advertisers/{response.json()['id']}").json()
     assert advertiser["name"] == "Savanna Journeys"
     assert advertiser["data_source"] == "hand_made_test"
+    assert advertiser["data_source_label"] == "on hand-made test data"
     assert advertiser["leads_file"] is None
     assert advertiser["stage_history_file"] is None
     assert advertiser["review_available"] is False
+
+
+def test_the_data_sources_to_pick_from_are_listed_with_their_labels(client: TestClient):
+    response = client.get("/data-sources")
+
+    assert response.status_code == 200
+    assert response.json() == [
+        {"value": "hand_made_test", "label": "on hand-made test data"},
+        {"value": "simulated", "label": "on simulated data"},
+        {"value": "public", "label": "on public data"},
+        {"value": "private", "label": "on the advertiser's private export"},
+    ]
 
 
 def test_an_advertiser_needs_a_name(client: TestClient):

@@ -11,7 +11,7 @@ from emva_api.features import CategoryInput, Features, NumberInput, Refused
 from emva_api.formatter import FormattedLead
 from emva_api.mapping import ColumnKind
 from emva_api.model import Model, NoChance, Regression, TransitionModel
-from emva_api.scoring import score
+from emva_api.scoring import NotLearned, score
 from emva_api.transitions import TRANSITIONS
 
 AS_OF = datetime(2025, 1, 1, tzinfo=UTC)
@@ -184,18 +184,18 @@ def test_a_chance_is_refused_when_no_lead_finished_any_transition():
 
 
 def test_a_mapping_input_the_model_did_not_learn_from_is_refused():
-    with pytest.raises(Refused, match="“Party” is not an input the latest Training run learned"):
+    with pytest.raises(NotLearned, match="“Party” is not an input the latest Training run learned"):
         score(LEARNED, TYPICAL, {**INPUTS, "Party": ColumnKind.NUMBER}, typical_deal_size=1.0)
     # Read as the kind the Mapping gives it, not guessed from the model.
     as_number = {**INPUTS, "Trip": ColumnKind.NUMBER}
-    with pytest.raises(Refused, match="“Trip” is not an input the latest Training run learned"):
+    with pytest.raises(NotLearned, match="“Trip” is not an input the latest Training run learned"):
         score(LEARNED, TYPICAL, as_number, typical_deal_size=1.0)
 
 
 def test_a_model_input_the_mapping_does_not_have_is_refused():
     without_nights = {k: v for k, v in INPUTS.items() if k != "Nights"}
 
-    with pytest.raises(Refused, match="“Nights” is an input of the latest Training run"):
+    with pytest.raises(NotLearned, match="“Nights” is an input of the latest Training run"):
         score(LEARNED, TYPICAL, without_nights, typical_deal_size=1.0)
 
 

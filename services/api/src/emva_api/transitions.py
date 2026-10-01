@@ -18,6 +18,12 @@ from pydantic import BaseModel, ConfigDict, computed_field
 from emva_api.formatter import FormattedLead
 from emva_api.ladder import LADDER, Stage, name_of, progress
 
+# Which leads each Transition leaves out, as the screen says it.
+LEFT_OUT = (
+    "Left out: leads that reached the transition but have neither made nor failed it yet. "
+    "Neglected leads, never attempted, are left out of every transition."
+)
+
 
 class Transition(BaseModel):
     """A lead moving from one Stage to the next."""

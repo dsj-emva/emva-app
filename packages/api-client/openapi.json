@@ -6,6 +6,11 @@
           "data_source": {
             "$ref": "#/components/schemas/DataSource"
           },
+          "data_source_label": {
+            "description": "The label every number from its data carries, e.g. 'on hand-made test data'",
+            "title": "Data Source Label",
+            "type": "string"
+          },
           "id": {
             "format": "uuid",
             "title": "Id",
@@ -58,6 +63,7 @@
           "id",
           "name",
           "data_source",
+          "data_source_label",
           "leads_file",
           "stage_history_file",
           "review_available",
@@ -355,6 +361,24 @@
         ],
         "title": "DataSource",
         "type": "string"
+      },
+      "DataSourceChoice": {
+        "properties": {
+          "label": {
+            "description": "What every number from it carries, e.g. 'on public data'",
+            "title": "Label",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/DataSource"
+          }
+        },
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "DataSourceChoice",
+        "type": "object"
       },
       "DateOrder": {
         "enum": [
@@ -836,6 +860,18 @@
           "mapping": {
             "$ref": "#/components/schemas/Mapping"
           },
+          "personal_data": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What formatting did with personal data, and whether the raw files are deleted yet; null before formatting",
+            "title": "Personal Data"
+          },
           "problems": {
             "description": "Why it cannot be confirmed yet; empty once it can",
             "items": {
@@ -878,6 +914,7 @@
           "confirmed_at",
           "formatted_at",
           "formatting",
+          "personal_data",
           "still_to_do",
           "problems",
           "crm_stages",
@@ -947,8 +984,9 @@
             "type": "number"
           },
           "data_source": {
-            "$ref": "#/components/schemas/DataSource",
-            "description": "Where the data the model learned from came from"
+            "description": "The label of the data the model learned from, e.g. 'on hand-made test data'",
+            "title": "Data Source",
+            "type": "string"
           },
           "explanation": {
             "$ref": "#/components/schemas/Explanation"
@@ -1272,6 +1310,11 @@
             ],
             "description": "The latest Training run; null before one"
           },
+          "left_out": {
+            "description": "Which leads each Transition leaves out",
+            "title": "Left Out",
+            "type": "string"
+          },
           "not_trainable_because": {
             "anyOf": [
               {
@@ -1298,6 +1341,7 @@
           "trainable",
           "not_trainable_because",
           "rule",
+          "left_out",
           "latest"
         ],
         "title": "Training",
@@ -2115,7 +2159,7 @@
                 }
               }
             },
-            "description": "No Training run yet, or none from which a chance can be known"
+            "description": "No Training run yet, none from which a chance can be known, or a Mapping whose inputs are not the ones it learned from"
           },
           "422": {
             "content": {
@@ -2186,7 +2230,7 @@
                 }
               }
             },
-            "description": "No Training run yet, or none from which a chance can be known"
+            "description": "No Training run yet, none from which a chance can be known, or a Mapping whose inputs are not the ones it learned from"
           },
           "422": {
             "content": {
@@ -2342,6 +2386,29 @@
           }
         },
         "summary": "Train Model"
+      }
+    },
+    "/data-sources": {
+      "get": {
+        "description": "The Data sources an advertiser's data can come from, with their labels.",
+        "operationId": "listDataSources",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/DataSourceChoice"
+                  },
+                  "title": "Response Listdatasources",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Data Sources"
       }
     },
     "/health": {

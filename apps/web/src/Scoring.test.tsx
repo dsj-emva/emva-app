@@ -35,7 +35,7 @@ const FORM: ScoringForm = {
 }
 
 const SCORED: ScoredLead = {
-  data_source: 'hand_made_test',
+  data_source: 'on hand-made test data',
   chance_of_winning: 0.125,
   typical_deal_size: 12000,
   lead_score: 1500,
@@ -146,7 +146,7 @@ describe('Scoring', () => {
       figures.getByText('A Lead score: a relative measure of quality, not money.'),
     ).toBeInTheDocument()
     expect(figures.getByText('Typical deal size used').nextSibling).toHaveTextContent('12,000')
-    expect(screen.getByText('On hand-made test data')).toBeInTheDocument()
+    expect(screen.getByText('on hand-made test data')).toBeInTheDocument()
 
     const rows = within(explanation)
       .getAllByRole('listitem')
@@ -154,10 +154,36 @@ describe('Scoring', () => {
       .map((row) => row.textContent)
     expect(rows).toEqual([
       'Typical leadEvery number at its training mean, every category at its most common value20%',
-      'Trip TypeSafari → Honeymoon−5 pts',
+      'Trip TypeSafari → Honeymoon−5.0 pts',
       'Budget (GBP)9,250 → not given−2.5 pts',
       'This leadSubmit score 1,50012.5%',
     ])
+  })
+
+  it('writes every move of the chance to the same precision', async () => {
+    const [trip, budget] = SCORED.explanation.steps
+    const moves = {
+      ...SCORED,
+      chance_of_winning: 0.9587,
+      explanation: {
+        typical_chance: 0.2,
+        steps: [
+          { ...trip!, after: 0.75, change: 0.55 },
+          { ...budget!, before: 0.75, after: 0.9587, change: 0.2087 },
+        ],
+      },
+    }
+    const service = fakeService({
+      [`GET ${FORM_PATH}`]: () => Response.json(FORM),
+      [`POST ${SCORES}`]: () => Response.json(moves),
+    })
+    renderScoring(service.client)
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Score this lead' }))
+
+    const explanation = await screen.findByRole('figure', { name: /Score explanation/ })
+    expect(within(explanation).getAllByText('+55.0 pts').length).toBeGreaterThan(0)
+    expect(within(explanation).getAllByText('+20.9 pts').length).toBeGreaterThan(0)
   })
 
   it('shows a lead equal to the typical one as no change', async () => {

@@ -87,7 +87,8 @@ def raw_kept(client: TestClient, advertiser: str) -> list[str]:
 
 def test_confirming_formats_the_data_and_returns_its_summary(client: TestClient, clock: FixedClock):
     advertiser = map_hand_made(client)
-    assert client.get(f"/advertisers/{advertiser}/mapping").json()["formatting"] is None
+    draft = client.get(f"/advertisers/{advertiser}/mapping").json()
+    assert (draft["formatting"], draft["personal_data"]) == (None, None)
     clock.set(datetime(2026, 9, 14, 11, 5, tzinfo=UTC))
 
     confirmed = confirm(client, advertiser)
@@ -96,6 +97,10 @@ def test_confirming_formats_the_data_and_returns_its_summary(client: TestClient,
     assert confirmed.json()["formatting"] == HAND_MADE_SUMMARY
     assert confirmed.json()["formatted_at"] == "2026-09-14T11:05:00Z"
     assert confirmed.json()["still_to_do"] is None
+    assert confirmed.json()["personal_data"] == (
+        "Names were removed; identifiers, emails and phones scrambled; every unmarked column "
+        "dropped; and the raw files deleted."
+    )
     again = client.get(f"/advertisers/{advertiser}/mapping").json()
     assert again["formatting"] == confirmed.json()["formatting"]
 
@@ -198,6 +203,10 @@ def test_when_one_raw_file_cannot_be_deleted_the_records_say_which_is_still_kept
     assert raw_kept(client, advertiser) == raw_files(bucket, advertiser) == ["stage-history"]
     review = client.get(f"/advertisers/{advertiser}/mapping").json()
     assert review["formatting"]["lead_count"] == 100
+    assert review["personal_data"] == (
+        "Names were removed; identifiers, emails and phones scrambled; every unmarked column "
+        "dropped."
+    )
     assert review["still_to_do"] == (
         "The data is formatted, but the raw files are not all deleted yet. Confirm again to "
         "delete them."
@@ -263,6 +272,18 @@ def test_confirming_an_old_confirmed_mapping_again_formats_it_while_its_raw_file
     assert raw_files(bucket, advertiser) == []
 
 
+def test_formatting_on_confirming_again_is_dated_by_the_clock_not_by_the_confirmation(
+    client: TestClient, settings: Settings, clock: FixedClock
+):
+    advertiser = confirmed_without_formatting(client, settings, HAND_MADE_MAPPING)
+    clock.set(datetime(2026, 9, 14, 11, 30, tzinfo=UTC))
+
+    again = confirm(client, advertiser).json()
+
+    assert again["confirmed_at"] == "2026-09-01T10:00:00Z"
+    assert again["formatted_at"] == "2026-09-14T11:30:00Z"
+
+
 def test_an_old_confirmed_mapping_whose_raw_file_is_gone_says_to_start_a_new_advertiser(
     client: TestClient, settings: Settings, bucket
 ):
@@ -302,7 +323,8 @@ def test_an_old_confirmed_mapping_without_a_date_order_cannot_be_formatted_and_k
 
 
 # Done when: no name, raw email or raw phone number from the hand-made dataset is found anywhere
-# in Postgres or object storage after formatting, and the raw uploads are gone.
+# in Postgres or object storage after formatting, training and scoring a lead, and the raw uploads
+# are gone.
 
 
 def personal_data(leads_csv: str) -> set[str]:
@@ -407,11 +429,23 @@ def test_after_formatting_no_personal_data_is_stored_anywhere(
         saved = c.put(f"/advertisers/{advertiser}/mapping", json=HAND_MADE_MAPPING).json()
         assert saved["problems"] == []
         confirmed = c.post(f"/advertisers/{advertiser}/mapping/confirmation")
-    assert confirmed.status_code == 200, confirmed.text
-    assert confirmed.json()["formatting"]["lead_count"] == 100
+        assert confirmed.status_code == 200, confirmed.text
+        assert confirmed.json()["formatting"]["lead_count"] == 100
+        assert list(own_bucket.objects.all()) == [], "the raw uploads are gone"
+        trained = c.post(f"/advertisers/{advertiser}/training-runs")
+        assert trained.status_code == 201, trained.text
+        first = next(csv.DictReader(io.StringIO(leads)))
+        inputs = {column: first[column] for column in HAND_MADE_MAPPING["leads"]["inputs"]}
+        scored = c.post(f"/advertisers/{advertiser}/scores", json={"inputs": inputs})
+        assert scored.status_code == 200, scored.text
 
     stored = everything_in_postgres(own_settings)
     assert '"identifier_hash"' in stored, "the scan sees the formatted leads"
+    assert '"model_key"' in stored, "the scan sees the Training run"
     assert sorted(value for value in personal if value in stored) == []
-    assert list(own_bucket.objects.all()) == [], "the raw uploads are gone"
-    assert sorted(v for v in personal if v in everything_in_object_storage(own_bucket)) == []
+    kept = sorted(o.key.rsplit("/", 1)[1] for o in own_bucket.objects.all())
+    run = trained.json()["latest"]["id"]
+    assert kept == [f"{run}-backtest.json", f"{run}.json"], "only the model and its Backtest"
+    in_storage = everything_in_object_storage(own_bucket)
+    assert '"transitions"' in in_storage and '"calibration"' in in_storage, "the scan reads both"
+    assert sorted(v for v in personal if v in in_storage) == []

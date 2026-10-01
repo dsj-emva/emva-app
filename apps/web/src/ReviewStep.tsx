@@ -185,7 +185,7 @@ export function ReviewStep({
         <Formatted
           summary={review.formatting}
           stages={review.stages_and_lost}
-          rawFilesDeleted={review.still_to_do === null}
+          personalData={review.personal_data}
         />
       )}
       <Training client={client} advertiserId={advertiser.id} formattedAt={review.formatted_at} />
@@ -316,11 +316,11 @@ function StillToDo({
 function Formatted({
   summary,
   stages,
-  rawFilesDeleted,
+  personalData,
 }: {
   summary: Summary
   stages: StageOrLostChoice[]
-  rawFilesDeleted: boolean
+  personalData: string | null
 }) {
   const headingId = useId()
   const countsId = useId()
@@ -337,10 +337,7 @@ function Formatted({
   return (
     <section className="formatted" aria-labelledby={headingId}>
       <h3 id={headingId}>What was formatted</h3>
-      <p className="muted">
-        Names were removed; identifiers, emails and phones scrambled; every unmarked column
-        dropped{rawFilesDeleted ? '; and the raw files deleted.' : '.'}
-      </p>
+      {personalData && <p className="muted">{personalData}</p>}
       <p id={countsId} className="visually-hidden">
         Leads by outcome
       </p>

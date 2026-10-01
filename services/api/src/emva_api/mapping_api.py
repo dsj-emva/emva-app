@@ -49,6 +49,16 @@ from emva_api.records import FileKind
 
 router = APIRouter()
 
+# What the Formatter does with personal data (decision 0010).
+PERSONAL_DATA_REMOVED = (
+    "Names were removed; identifiers, emails and phones scrambled; every unmarked column dropped"
+)
+
+# Said by the review screen and by training, of a mapping confirmed before its data was formatted.
+NOT_FORMATTED_YET = (
+    "The mapping is confirmed but its data is not formatted yet. Confirm again to format it."
+)
+
 
 class CrmStage(BaseModel):
     name: str
@@ -106,6 +116,10 @@ class MappingReview(BaseModel):
     confirmed_at: datetime | None = Field(description="When a person confirmed it; null in draft")
     formatted_at: datetime | None = Field(description="When its data was formatted")
     formatting: Summary | None = Field(description="What formatting made of the files")
+    personal_data: str | None = Field(
+        description="What formatting did with personal data, and whether the raw files are "
+        "deleted yet; null before formatting"
+    )
     still_to_do: str | None = Field(
         description="What confirming still has to do, when it was interrupted; confirming again "
         "does it. Null in draft and once confirming is done."
@@ -217,7 +231,7 @@ def confirm_mapping(
             lacking = _lacking_for_formatting(record)
             if lacking:
                 raise _never_formatted(lacking)
-            _format(advertiser, confirmed, store, session, confirmed_before=True)
+            _format(advertiser, confirmed, store, session, clock.now(), confirmed_before=True)
             _commit(session)
         elif not _raw_uploads(advertiser):
             raise HTTPException(status.HTTP_409_CONFLICT, "The mapping is already confirmed.")
@@ -234,7 +248,7 @@ def confirm_mapping(
             f"The mapping cannot be confirmed yet: {' '.join(refused.problems)}",
         ) from refused
     assert record is not None, "an empty draft is never confirmable"
-    _format(advertiser, confirmed, store, session, confirmed_before=False)
+    _format(advertiser, confirmed, store, session, clock.now(), confirmed_before=False)
     record.content = confirmed.mapping.model_dump(mode="json")
     record.confirmed_at = confirmed.confirmed_at
     record.confirmed_against = shape.model_dump(mode="json")
@@ -248,9 +262,12 @@ def _format(
     confirmed: ConfirmedMapping,
     store: ObjectStore,
     session: Session,
+    at: datetime,
     *,
     confirmed_before: bool,
 ) -> None:
+    """Format both files with the confirmed mapping, recording them as formatted at the given
+    time; the caller commits."""
     tables = []
     for kind in (FileKind.LEADS, FileKind.STAGE_HISTORY):
         file = uploaded_file(advertiser, kind)
@@ -261,9 +278,7 @@ def _format(
             tables.append(read_stored(file, store))
         except HTTPException as error:
             raise _never_formatted(f"the raw {label(kind)} can no longer be read") from error
-    records.keep_formatted(
-        session, advertiser, format_files(*tables, confirmed), confirmed.confirmed_at
-    )
+    records.keep_formatted(session, advertiser, format_files(*tables, confirmed), at)
 
 
 def _lacking_for_formatting(record: records.AdvertiserMapping) -> str | None:
@@ -326,10 +341,7 @@ def _confirmed_review(
     if formatting is None and lacking:
         still_to_do = _never_formatted(lacking).detail
     elif formatting is None:
-        still_to_do = (
-            "The mapping is confirmed but its data is not formatted yet. Confirm again to "
-            "format it."
-        )
+        still_to_do = NOT_FORMATTED_YET
     elif _raw_uploads(advertiser):
         still_to_do = (
             "The data is formatted, but the raw files are not all deleted yet. Confirm again "
@@ -343,6 +355,7 @@ def _confirmed_review(
         confirmed_at=record.confirmed_at,
         formatting=formatting,
         still_to_do=still_to_do,
+        raw_files_deleted=not _raw_uploads(advertiser),
     )
 
 
@@ -359,12 +372,18 @@ def _review(
     confirmed_at: datetime | None = None,
     formatting: records.Formatting | None = None,
     still_to_do: str | None = None,
+    raw_files_deleted: bool = False,
 ) -> MappingReview:
+    personal_data = None
+    if formatting is not None:
+        deleted = "; and the raw files deleted." if raw_files_deleted else "."
+        personal_data = PERSONAL_DATA_REMOVED + deleted
     return MappingReview(
         mapping=draft,
         confirmed_at=confirmed_at and confirmed_at.astimezone(UTC),
         formatted_at=formatting and formatting.formatted_at.astimezone(UTC),
         formatting=formatting and Summary.model_validate(formatting.summary),
+        personal_data=personal_data,
         still_to_do=still_to_do,
         problems=mapping.problems(draft, shape.files()),
         crm_stages=shape.crm_stages,

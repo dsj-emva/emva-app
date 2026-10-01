@@ -87,7 +87,7 @@ def test_a_lead_is_scored_with_its_chance_lead_score_and_explanation(
     assert 0 < chance < 1
     assert body["typical_deal_size"] == 12000.0
     assert body["lead_score"] == pytest.approx(chance * 12000.0)
-    assert body["data_source"] == "hand_made_test"
+    assert body["data_source"] == "on hand-made test data"
     steps = body["explanation"]["steps"]
     assert [(s["input"], s["value"]) for s in steps] == [
         ("Enquiry Channel", "Phone"),
@@ -164,6 +164,29 @@ def test_scoring_is_refused_before_a_training_run(client: TestClient):
     form = scoring_form(client, advertiser)
     assert (form.status_code, form.json()["detail"]) == (409, because)
     refused(client, advertiser, A_LEAD, 409, because)
+
+
+def test_a_mapping_the_latest_training_run_did_not_learn_from_is_a_conflict_on_form_and_score(
+    client: TestClient, settings: Settings, trained: str
+):
+    """A mismatch between the Mapping and the model is the advertiser's state, not the lead's."""
+    engine = create_engine(settings.database_url)
+    with engine.begin() as connection:
+        connection.execute(
+            text(
+                "UPDATE mapping SET content = jsonb_set(content::jsonb, "
+                "'{leads,inputs,Trip Type}', '\"number\"')::json WHERE advertiser_id = :id"
+            ),
+            {"id": trained},
+        )
+    engine.dispose()
+    because = (
+        "“Trip Type” is not an input the latest Training run learned from as a number. Train again."
+    )
+
+    form = scoring_form(client, trained)
+    assert (form.status_code, form.json()["detail"]) == (409, because)
+    refused(client, trained, {**A_LEAD, "Trip Type": "3"}, 409, because)
 
 
 def hand_made_rows() -> list[dict[str, str]]:

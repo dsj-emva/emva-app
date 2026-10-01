@@ -203,6 +203,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/data-sources": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Data Sources
+         * @description The Data sources an advertiser's data can come from, with their labels.
+         */
+        get: operations["listDataSources"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/health": {
         parameters: {
             query?: never;
@@ -227,6 +247,11 @@ export interface components {
         /** Advertiser */
         Advertiser: {
             data_source: components["schemas"]["DataSource"];
+            /**
+             * Data Source Label
+             * @description The label every number from its data carries, e.g. 'on hand-made test data'
+             */
+            data_source_label: string;
             /**
              * Id
              * Format: uuid
@@ -380,6 +405,15 @@ export interface components {
          * @enum {string}
          */
         DataSource: "hand_made_test" | "simulated" | "public" | "private";
+        /** DataSourceChoice */
+        DataSourceChoice: {
+            /**
+             * Label
+             * @description What every number from it carries, e.g. 'on public data'
+             */
+            label: string;
+            value: components["schemas"]["DataSource"];
+        };
         /**
          * DateOrder
          * @enum {string}
@@ -618,6 +652,11 @@ export interface components {
             leads_roles: components["schemas"]["LeadsRoleChoice"][];
             mapping: components["schemas"]["Mapping"];
             /**
+             * Personal Data
+             * @description What formatting did with personal data, and whether the raw files are deleted yet; null before formatting
+             */
+            personal_data: string | null;
+            /**
              * Problems
              * @description Why it cannot be confirmed yet; empty once it can
              */
@@ -660,8 +699,11 @@ export interface components {
         ScoredLead: {
             /** Chance Of Winning */
             chance_of_winning: number;
-            /** @description Where the data the model learned from came from */
-            data_source: components["schemas"]["DataSource"];
+            /**
+             * Data Source
+             * @description The label of the data the model learned from, e.g. 'on hand-made test data'
+             */
+            data_source: string;
             explanation: components["schemas"]["Explanation"];
             /**
              * Lead Score
@@ -811,6 +853,11 @@ export interface components {
         Training: {
             /** @description The latest Training run; null before one */
             latest: components["schemas"]["TrainingRunView"] | null;
+            /**
+             * Left Out
+             * @description Which leads each Transition leaves out
+             */
+            left_out: string;
             /**
              * Not Trainable Because
              * @description Why not, while it cannot train
@@ -1375,7 +1422,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description No Training run yet, or none from which a chance can be known */
+            /** @description No Training run yet, none from which a chance can be known, or a Mapping whose inputs are not the ones it learned from */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1433,7 +1480,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description No Training run yet, or none from which a chance can be known */
+            /** @description No Training run yet, none from which a chance can be known, or a Mapping whose inputs are not the ones it learned from */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -1565,6 +1612,26 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["Problem"];
+                };
+            };
+        };
+    };
+    listDataSources: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DataSourceChoice"][];
                 };
             };
         };

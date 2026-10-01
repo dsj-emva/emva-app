@@ -1200,6 +1200,15 @@ tr:has(select) > * {
   height: auto;
 }
 
+.interval-better {
+  max-width: 20rem;
+  margin: 0;
+  text-align: right;
+  font-family: var(--font-data);
+  font-size: 0.6875rem;
+  color: var(--color-muted);
+}
+
 .interval .range {
   stroke: var(--color-chart-mark);
   stroke-width: 2;

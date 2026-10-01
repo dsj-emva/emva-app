@@ -18,6 +18,7 @@ const BOTH_UPLOADED: Advertiser = {
   id: ID,
   name: 'Savanna Journeys',
   data_source: 'hand_made_test',
+  data_source_label: 'on hand-made test data',
   leads_file: {
     kind: 'leads',
     file_name: 'leads.csv',
@@ -97,6 +98,7 @@ function review(mapping: Mapping, rest: Partial<MappingReview> = {}): MappingRev
     confirmed_at: null,
     formatted_at: null,
     formatting: null,
+    personal_data: null,
     still_to_do: null,
     problems: ['Enter the typical deal size.'],
     crm_stages: mapping.stage_history.crm_stage ? CRM_STAGES : [],
@@ -110,6 +112,7 @@ const NOT_TRAINABLE = {
   not_trainable_because:
     'The mapping is not confirmed yet. Nothing trains before a person confirms it.',
   rule: 'A transition’s model is learned only from at least 10 leads that made it.',
+  left_out: 'Left out: leads that have neither made nor failed it yet.',
   latest: null,
 }
 
@@ -337,6 +340,7 @@ describe('ReviewStep', () => {
       problems: [],
       confirmed_at: '2026-09-20T16:30:00Z',
       formatting: FORMATTED,
+      personal_data: 'Names were removed; and the raw files deleted.',
     })
     const service = reviewService({
       [`GET ${ADVERTISER}/files/leads/columns`]: () => Response.json([]),
@@ -372,7 +376,9 @@ describe('ReviewStep', () => {
       'Leads fileThe submission time cannot be read.1101',
       'Stage-history fileThe lead is not in the leads file.122, 3, 4, 5, 6, 7, 8, 9, 10, 11…',
     ])
-    expect(summary.getByText(/the raw files deleted/)).toBeInTheDocument()
+    expect(
+      summary.getByText('Names were removed; and the raw files deleted.'),
+    ).toBeInTheDocument()
   })
 
   it('names the ladder stages in the summary as the service names them', async () => {
@@ -418,6 +424,7 @@ describe('ReviewStep', () => {
     const interrupted = review(EMPTY, {
       confirmed_at: '2026-09-20T16:30:00Z',
       formatting: FORMATTED,
+      personal_data: 'Names were removed.',
       still_to_do: stillToDo,
     })
     const done = { ...interrupted, still_to_do: null }
@@ -435,6 +442,7 @@ describe('ReviewStep', () => {
 
     const notFinished = await region('Confirming is not finished')
     expect(notFinished.getByText(stillToDo)).toBeInTheDocument()
+    expect(screen.getByText('Names were removed.')).toBeInTheDocument()
     expect(screen.queryByText(/the raw files deleted/)).not.toBeInTheDocument()
     expect(service.sentTo(`GET ${ADVERTISER}/files/leads/columns`)).toHaveLength(0)
     expect(service.sentTo(`GET ${ADVERTISER}/files/stage-history/columns`)).toHaveLength(1)

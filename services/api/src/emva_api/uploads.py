@@ -42,6 +42,11 @@ class NewAdvertiser(BaseModel):
     data_source: DataSource
 
 
+class DataSourceChoice(BaseModel):
+    value: DataSource
+    label: str = Field(description="What every number from it carries, e.g. 'on public data'")
+
+
 class Column(BaseModel):
     name: str
     examples: list[str] = Field(description="The column's first few distinct non-empty values")
@@ -62,6 +67,9 @@ class Advertiser(BaseModel):
     id: uuid.UUID
     name: str
     data_source: DataSource
+    data_source_label: str = Field(
+        description="The label every number from its data carries, e.g. 'on hand-made test data'"
+    )
     leads_file: FileProfile | None
     stage_history_file: FileProfile | None
     review_available: bool = Field(description="True once both files are uploaded")
@@ -87,6 +95,12 @@ async def _csv_body(request: Request) -> bytes:
             raise too_large
         chunks.append(chunk)
     return b"".join(chunks)
+
+
+@router.get("/data-sources", operation_id="listDataSources")
+def list_data_sources() -> list[DataSourceChoice]:
+    """The Data sources an advertiser's data can come from, with their labels."""
+    return [DataSourceChoice(value=source, label=source.label) for source in DataSource]
 
 
 @router.post(
@@ -209,6 +223,7 @@ def _describe(advertiser: records.Advertiser) -> Advertiser:
         id=advertiser.id,
         name=advertiser.name,
         data_source=advertiser.data_source,
+        data_source_label=advertiser.data_source.label,
         leads_file=leads_file and _profile(leads_file),
         stage_history_file=stage_history_file and _profile(stage_history_file),
         review_available=leads_file is not None and stage_history_file is not None,

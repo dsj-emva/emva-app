@@ -46,10 +46,23 @@ describe('BacktestResults', () => {
     expect(within(comparison).getByText(BACKTEST.wording.better_side)).toBeInTheDocument()
   })
 
+  it('keeps which side is better apart from the zero tick, so neither runs into the other', () => {
+    render(<BacktestResults backtest={BACKTEST} dataSource={SOURCE} />)
+
+    const better = screen.getByText(BACKTEST.wording.better_side)
+    expect(better.closest('svg')).toBeNull()
+  })
+
   it('marks a failed check as failed, as the service says', () => {
     render(<BacktestResults backtest={BACKTEST} dataSource={SOURCE} />)
 
-    expect(screen.getByText('Trust gate:')).toHaveTextContent('Trust gate: Failed')
+    const verdict = screen.getByText('Trust gate: Failed')
+    expect(verdict.closest('[aria-hidden="true"]')).toBeNull()
+    // Each status is read once: the verdict once, then once per check.
+    const spoken = screen
+      .getAllByText('Failed')
+      .filter((mark) => mark.closest('[aria-hidden="true"]') === null)
+    expect(spoken).toHaveLength(2)
     const checks = within(screen.getByRole('list', { name: 'Checks of the Trust gate' }))
       .getAllByRole('listitem')
       .map((item) => item.textContent)
@@ -68,7 +81,7 @@ describe('BacktestResults', () => {
     }
     render(<BacktestResults backtest={passing} dataSource={SOURCE} />)
 
-    expect(screen.getByText('Trust gate:')).toHaveTextContent('Trust gate: Passed')
+    expect(screen.getByText('Trust gate: Passed')).toBeInTheDocument()
     expect(screen.queryByText('Failed')).not.toBeInTheDocument()
   })
 

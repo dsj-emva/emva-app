@@ -48,6 +48,10 @@ RULE = (
     "failed it. With fewer it is too few to learn, and every lead gets its smoothed rate: its "
     "own rate pulled towards the rate across all four transitions."
 )
+LEFT_OUT = (
+    "Left out: leads that reached the transition but have neither made nor failed it yet. "
+    "Neglected leads, never attempted, are left out of every transition."
+)
 
 
 def train(client: TestClient, advertiser: str):
@@ -67,6 +71,7 @@ def refused_with(client: TestClient, advertiser: str, reason: str) -> None:
         "trainable": False,
         "not_trainable_because": reason,
         "rule": RULE,
+        "left_out": LEFT_OUT,
         "latest": None,
     }
 
@@ -136,6 +141,7 @@ def test_training_on_the_hand_made_dataset_learns_every_transition_and_counts_it
         "trainable": True,
         "not_trainable_because": None,
         "rule": RULE,
+        "left_out": LEFT_OUT,
         "latest": None,
     }
 

@@ -30,10 +30,11 @@ from emva_api.dependencies import (
     find_advertiser,
 )
 from emva_api.mapping import Mapping
+from emva_api.mapping_api import NOT_FORMATTED_YET
 from emva_api.model import RULE, Model, train
 from emva_api.object_store import MissingObject, ObjectStore
 from emva_api.training_runs import STORAGE_FAILED, latest_run
-from emva_api.transitions import Transition
+from emva_api.transitions import LEFT_OUT, Transition
 
 router = APIRouter()
 
@@ -79,6 +80,7 @@ class Training(BaseModel):
     trainable: bool
     not_trainable_because: str | None = Field(description="Why not, while it cannot train")
     rule: str = Field(description="When a Transition's model is learned")
+    left_out: str = Field(description="Which leads each Transition leaves out")
     latest: TrainingRunView | None = Field(description="The latest Training run; null before one")
 
 
@@ -154,10 +156,7 @@ def _not_trainable_because(advertiser: records.Advertiser) -> str | None:
     if mapping is None or mapping.confirmed_at is None:
         return "The mapping is not confirmed yet. Nothing trains before a person confirms it."
     if advertiser.formatting is None:
-        return (
-            "The mapping is confirmed but its data is not formatted yet. Confirm again to "
-            "format it."
-        )
+        return NOT_FORMATTED_YET
     if not Mapping.model_validate(mapping.content).leads.inputs:
         return "The mapping marks no input to the score, so there is nothing to learn from."
     return None
@@ -166,7 +165,11 @@ def _not_trainable_because(advertiser: records.Advertiser) -> str | None:
 def _training(advertiser: records.Advertiser, latest: TrainingRunView | None) -> Training:
     because = _not_trainable_because(advertiser)
     return Training(
-        trainable=because is None, not_trainable_because=because, rule=RULE, latest=latest
+        trainable=because is None,
+        not_trainable_because=because,
+        rule=RULE,
+        left_out=LEFT_OUT,
+        latest=latest,
     )
 
 
