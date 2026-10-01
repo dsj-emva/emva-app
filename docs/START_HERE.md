@@ -11,7 +11,7 @@ section 4). States: not started, in progress, waiting for approval, done.
 | phase | what | state | pull request | report | date |
 |---|---|---|---|---|---|
 | 0 | Set-up of both repositories | done | emva-app [#2](https://github.com/dsj-emva/emva-app/pull/2), [#3](https://github.com/dsj-emva/emva-app/pull/3); emva-sim [#2](https://github.com/dsj-emva/emva-sim/pull/2) | [phase-0.md](phases/phase-0.md) | 2026-10-01 |
-| 1 | First thin slice: upload, format, train, results, score one lead | in progress | | | 2026-10-01 |
+| 1 | First thin slice: upload, format, train, results, score one lead | waiting for approval | emva-app [#13](https://github.com/dsj-emva/emva-app/pull/13), [#14](https://github.com/dsj-emva/emva-app/pull/14), [#15](https://github.com/dsj-emva/emva-app/pull/15), [#16](https://github.com/dsj-emva/emva-app/pull/16), [#19](https://github.com/dsj-emva/emva-app/pull/19), [#20](https://github.com/dsj-emva/emva-app/pull/20), [#21](https://github.com/dsj-emva/emva-app/pull/21), [#22](https://github.com/dsj-emva/emva-app/pull/22) | [phase-1.md](phases/phase-1.md) | 2026-10-01 |
 | S | Planned-hospitality profile and generator (runs alongside 1 to 3) | not started | | | |
 | 2 | Deeper model | not started | | | |
 | 3 | The AI jobs | not started | | | |
