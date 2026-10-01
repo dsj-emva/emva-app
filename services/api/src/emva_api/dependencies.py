@@ -12,7 +12,7 @@ from sqlalchemy.orm import Session
 from emva_api import records
 from emva_api.clock import Clock
 from emva_api.csv_file import Table, UnreadableFile, read_csv
-from emva_api.object_store import ObjectStore
+from emva_api.object_store import MissingObject, ObjectStore
 from emva_api.records import FileKind
 
 
@@ -74,7 +74,7 @@ def read_stored(file: records.UploadedFile, store: ObjectStore) -> Table:
         )
     try:
         return read_csv(store.get(file.object_key))
-    except UnreadableFile as error:
+    except (UnreadableFile, MissingObject) as error:
         raise HTTPException(
             status.HTTP_409_CONFLICT,
             f"The stored {label(file.kind)} can no longer be read. Upload it again.",

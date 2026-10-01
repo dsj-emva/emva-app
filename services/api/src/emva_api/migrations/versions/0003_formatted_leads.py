@@ -1,4 +1,4 @@
-"""Formatted leads, their stage events and the formatting summary; raw uploads can be deleted
+"""Formatted leads, their stage events and the summary; raw uploads deleted; column facts
 
 Revision ID: 0003
 Revises: 0002
@@ -28,18 +28,20 @@ STAGE_OR_LOST = sa.Enum(
 
 def upgrade() -> None:
     op.alter_column("uploaded_file", "object_key", existing_type=sa.String(255), nullable=True)
+    op.add_column("uploaded_file", sa.Column("column_facts", sa.JSON(), nullable=True))
     op.create_table(
         "lead",
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("advertiser_id", sa.Uuid(), nullable=False),
-        sa.Column("identifier", sa.Text(), nullable=False),
+        sa.Column("identifier_hash", sa.String(length=64), nullable=False),
         sa.Column("submitted_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("email_hash", sa.String(length=64), nullable=True),
         sa.Column("phone_hash", sa.String(length=64), nullable=True),
-        sa.Column("inputs", sa.JSON(), nullable=False),
+        sa.Column("number_inputs", sa.JSON(), nullable=False),
+        sa.Column("category_inputs", sa.JSON(), nullable=False),
         sa.ForeignKeyConstraint(["advertiser_id"], ["advertiser.id"]),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("advertiser_id", "identifier"),
+        sa.UniqueConstraint("advertiser_id", "identifier_hash"),
     )
     op.create_table(
         "stage_event",
@@ -68,4 +70,5 @@ def downgrade() -> None:
     op.drop_table("stage_event")
     op.drop_table("lead")
     STAGE_OR_LOST.drop(op.get_bind())
+    op.drop_column("uploaded_file", "column_facts")
     op.alter_column("uploaded_file", "object_key", existing_type=sa.String(255), nullable=False)

@@ -97,6 +97,32 @@
         "title": "ColumnKind",
         "type": "string"
       },
+      "Country": {
+        "description": "The countries a phone written without an international prefix can be read as from.",
+        "enum": [
+          "GB",
+          "IE"
+        ],
+        "title": "Country",
+        "type": "string"
+      },
+      "CountryChoice": {
+        "properties": {
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/Country"
+          }
+        },
+        "required": [
+          "value",
+          "name"
+        ],
+        "title": "CountryChoice",
+        "type": "object"
+      },
       "CrmStage": {
         "properties": {
           "name": {
@@ -126,6 +152,32 @@
         "title": "DataSource",
         "type": "string"
       },
+      "DateOrder": {
+        "enum": [
+          "year_month_day",
+          "day_month_year",
+          "month_day_year"
+        ],
+        "title": "DateOrder",
+        "type": "string"
+      },
+      "DateOrderChoice": {
+        "properties": {
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "value": {
+            "$ref": "#/components/schemas/DateOrder"
+          }
+        },
+        "required": [
+          "value",
+          "label"
+        ],
+        "title": "DateOrderChoice",
+        "type": "object"
+      },
       "FileKind": {
         "enum": [
           "leads",
@@ -150,6 +202,11 @@
           "kind": {
             "$ref": "#/components/schemas/FileKind"
           },
+          "raw_kept": {
+            "description": "Whether the raw file is still in storage; false once formatted and deleted",
+            "title": "Raw Kept",
+            "type": "boolean"
+          },
           "row_count": {
             "title": "Row Count",
             "type": "integer"
@@ -165,59 +222,10 @@
           "file_name",
           "uploaded_at",
           "row_count",
-          "column_names"
+          "column_names",
+          "raw_kept"
         ],
         "title": "FileProfile",
-        "type": "object"
-      },
-      "FormattingSummary": {
-        "description": "What the Formatter made of the two files.",
-        "properties": {
-          "formatted_at": {
-            "format": "date-time",
-            "title": "Formatted At",
-            "type": "string"
-          },
-          "lead_count": {
-            "title": "Lead Count",
-            "type": "integer"
-          },
-          "lost": {
-            "title": "Lost",
-            "type": "integer"
-          },
-          "never_reached_contact_attempted": {
-            "title": "Never Reached Contact Attempted",
-            "type": "integer"
-          },
-          "unfinished": {
-            "description": "Neither won nor lost",
-            "title": "Unfinished",
-            "type": "integer"
-          },
-          "unreadable_rows": {
-            "description": "Every row that could not be read, and not kept, with why",
-            "items": {
-              "$ref": "#/components/schemas/UnreadableRow"
-            },
-            "title": "Unreadable Rows",
-            "type": "array"
-          },
-          "won": {
-            "title": "Won",
-            "type": "integer"
-          }
-        },
-        "required": [
-          "formatted_at",
-          "lead_count",
-          "won",
-          "lost",
-          "unfinished",
-          "never_reached_contact_attempted",
-          "unreadable_rows"
-        ],
-        "title": "FormattingSummary",
         "type": "object"
       },
       "HTTPValidationError": {
@@ -377,6 +385,28 @@
             "title": "Crm Stages",
             "type": "object"
           },
+          "date_order": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/DateOrder"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The order both files write dates in"
+          },
+          "default_country": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Country"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Where a phone written without an international prefix is from"
+          },
           "leads": {
             "$ref": "#/components/schemas/LeadsColumns",
             "default": {
@@ -386,6 +416,12 @@
           "stage_history": {
             "$ref": "#/components/schemas/StageHistoryColumns",
             "default": {}
+          },
+          "time_zone": {
+            "default": "UTC",
+            "description": "The zone of every time written without one",
+            "title": "Time Zone",
+            "type": "string"
           },
           "typical_deal_size": {
             "anyOf": [
@@ -417,6 +453,14 @@
             "description": "When a person confirmed it; null in draft",
             "title": "Confirmed At"
           },
+          "countries": {
+            "description": "The countries a phone without an international prefix can be from",
+            "items": {
+              "$ref": "#/components/schemas/CountryChoice"
+            },
+            "title": "Countries",
+            "type": "array"
+          },
           "crm_stages": {
             "description": "Every CRM stage name in the column marked as the CRM stage, most used first",
             "items": {
@@ -425,16 +469,37 @@
             "title": "Crm Stages",
             "type": "array"
           },
-          "formatting": {
+          "date_orders": {
+            "description": "The orders dates can be written in",
+            "items": {
+              "$ref": "#/components/schemas/DateOrderChoice"
+            },
+            "title": "Date Orders",
+            "type": "array"
+          },
+          "formatted_at": {
             "anyOf": [
               {
-                "$ref": "#/components/schemas/FormattingSummary"
+                "format": "date-time",
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "What confirming formatted; null in draft"
+            "description": "When its data was formatted",
+            "title": "Formatted At"
+          },
+          "formatting": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Summary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What formatting made of the files"
           },
           "input_kinds": {
             "description": "How an input column can be read",
@@ -478,18 +543,34 @@
             },
             "title": "Stages And Lost",
             "type": "array"
+          },
+          "still_to_do": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What confirming still has to do, when it was interrupted; confirming again does it. Null in draft and once confirming is done.",
+            "title": "Still To Do"
           }
         },
         "required": [
           "mapping",
           "confirmed_at",
+          "formatted_at",
           "formatting",
+          "still_to_do",
           "problems",
           "crm_stages",
           "leads_roles",
           "stage_history_roles",
           "input_kinds",
-          "stages_and_lost"
+          "stages_and_lost",
+          "date_orders",
+          "countries"
         ],
         "title": "MappingReview",
         "type": "object"
@@ -646,40 +727,80 @@
         "title": "StageOrLostChoice",
         "type": "object"
       },
-      "UnreadableRow": {
+      "Summary": {
+        "description": "What the Formatter made of the two files.",
         "properties": {
-          "file": {
-            "$ref": "#/components/schemas/FileKind"
+          "lead_count": {
+            "title": "Lead Count",
+            "type": "integer"
           },
-          "lead": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "The row's lead identifier, when it has one",
-            "title": "Lead"
+          "lost": {
+            "title": "Lost",
+            "type": "integer"
           },
-          "reason": {
-            "title": "Reason",
-            "type": "string"
+          "neglected": {
+            "description": "Neglected leads: never attempted to contact",
+            "title": "Neglected",
+            "type": "integer"
           },
-          "row": {
-            "description": "The row's place in its file, counting from 1 below the header",
-            "title": "Row",
+          "no_outcome_yet": {
+            "description": "Leads neither won nor lost yet",
+            "title": "No Outcome Yet",
+            "type": "integer"
+          },
+          "unreadable": {
+            "items": {
+              "$ref": "#/components/schemas/UnreadableRows"
+            },
+            "title": "Unreadable",
+            "type": "array"
+          },
+          "won": {
+            "title": "Won",
             "type": "integer"
           }
         },
         "required": [
-          "file",
-          "row",
-          "lead",
-          "reason"
+          "lead_count",
+          "won",
+          "lost",
+          "no_outcome_yet",
+          "neglected",
+          "unreadable"
         ],
-        "title": "UnreadableRow",
+        "title": "Summary",
+        "type": "object"
+      },
+      "UnreadableRows": {
+        "description": "The rows of one file that could not be read for one reason, and so were not kept.",
+        "properties": {
+          "count": {
+            "title": "Count",
+            "type": "integer"
+          },
+          "file": {
+            "$ref": "#/components/schemas/FileKind"
+          },
+          "first_rows": {
+            "description": "The first 10 of them, by place in the file from 1 below the header",
+            "items": {
+              "type": "integer"
+            },
+            "title": "First Rows",
+            "type": "array"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "file",
+          "reason",
+          "count",
+          "first_rows"
+        ],
+        "title": "UnreadableRows",
         "type": "object"
       },
       "ValidationError": {
@@ -1154,7 +1275,7 @@
     },
     "/advertisers/{advertiser_id}/mapping/confirmation": {
       "post": {
-        "description": "Confirm the saved draft, recording when, and format both files with it in the same\noperation; refused while it has problems. The formatted data and the confirmation are saved\ntogether or not at all; the raw uploads are deleted once they are saved. Confirming again\nfinishes a deletion that failed.",
+        "description": "Confirm the saved draft, recording when, and format both files with it in the same\noperation; refused while it has problems. The formatted data and the confirmation are saved\ntogether or not at all; then each raw file is deleted, and recorded as deleted, in turn.\n\nConfirming again finishes what was interrupted: it formats a mapping confirmed before its\ndata was formatted, while the raw files are there, and deletes raw files still kept.",
         "operationId": "confirmMapping",
         "parameters": [
           {
@@ -1197,7 +1318,7 @@
                 }
               }
             },
-            "description": "Not confirmable yet, already confirmed, or a stored file unreadable"
+            "description": "Not confirmable yet, already confirmed, or a file cannot be read"
           },
           "422": {
             "content": {
@@ -1217,7 +1338,7 @@
                 }
               }
             },
-            "description": "Not confirmed, or confirmed but the raw uploads not yet deleted"
+            "description": "Not confirmed, or confirmed but the raw files not all deleted yet"
           }
         },
         "summary": "Confirm Mapping"

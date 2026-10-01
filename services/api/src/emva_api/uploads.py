@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field, StringConstraints
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 
 from emva_api import records
-from emva_api.csv_file import UnreadableFile, profile, read_csv
+from emva_api.csv_file import UnreadableFile, column_facts, profile, read_csv
 from emva_api.dependencies import (
     NOT_FOUND,
     UNREADABLE_STORED_FILE,
@@ -53,6 +53,9 @@ class FileProfile(BaseModel):
     uploaded_at: datetime
     row_count: int
     column_names: list[str]
+    raw_kept: bool = Field(
+        description="Whether the raw file is still in storage; false once formatted and deleted"
+    )
 
 
 class Advertiser(BaseModel):
@@ -159,6 +162,7 @@ def upload_file(
     file.uploaded_at = clock.now()
     file.row_count = table.row_count
     file.column_names = table.columns
+    file.column_facts = {name: f.model_dump() for name, f in column_facts(table).items()}
     try:
         session.commit()
     except SQLAlchemyError as error:
@@ -224,4 +228,5 @@ def _profile(file: records.UploadedFile) -> FileProfile:
         uploaded_at=file.uploaded_at.astimezone(UTC),
         row_count=file.row_count,
         column_names=file.column_names,
+        raw_kept=file.object_key is not None,
     )

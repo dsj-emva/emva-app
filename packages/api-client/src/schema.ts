@@ -111,8 +111,10 @@ export interface paths {
          * Confirm Mapping
          * @description Confirm the saved draft, recording when, and format both files with it in the same
          *     operation; refused while it has problems. The formatted data and the confirmation are saved
-         *     together or not at all; the raw uploads are deleted once they are saved. Confirming again
-         *     finishes a deletion that failed.
+         *     together or not at all; then each raw file is deleted, and recorded as deleted, in turn.
+         *
+         *     Confirming again finishes what was interrupted: it formats a mapping confirmed before its
+         *     data was formatted, while the raw files are there, and deletes raw files still kept.
          */
         post: operations["confirmMapping"];
         delete?: never;
@@ -181,6 +183,18 @@ export interface components {
          * @enum {string}
          */
         ColumnKind: "number" | "category";
+        /**
+         * Country
+         * @description The countries a phone written without an international prefix can be read as from.
+         * @enum {string}
+         */
+        Country: "GB" | "IE";
+        /** CountryChoice */
+        CountryChoice: {
+            /** Name */
+            name: string;
+            value: components["schemas"]["Country"];
+        };
         /** CrmStage */
         CrmStage: {
             /** Name */
@@ -195,6 +209,17 @@ export interface components {
          */
         DataSource: "hand_made_test" | "simulated" | "public" | "private";
         /**
+         * DateOrder
+         * @enum {string}
+         */
+        DateOrder: "year_month_day" | "day_month_year" | "month_day_year";
+        /** DateOrderChoice */
+        DateOrderChoice: {
+            /** Label */
+            label: string;
+            value: components["schemas"]["DateOrder"];
+        };
+        /**
          * FileKind
          * @enum {string}
          */
@@ -206,6 +231,11 @@ export interface components {
             /** File Name */
             file_name: string;
             kind: components["schemas"]["FileKind"];
+            /**
+             * Raw Kept
+             * @description Whether the raw file is still in storage; false once formatted and deleted
+             */
+            raw_kept: boolean;
             /** Row Count */
             row_count: number;
             /**
@@ -213,35 +243,6 @@ export interface components {
              * Format: date-time
              */
             uploaded_at: string;
-        };
-        /**
-         * FormattingSummary
-         * @description What the Formatter made of the two files.
-         */
-        FormattingSummary: {
-            /**
-             * Formatted At
-             * Format: date-time
-             */
-            formatted_at: string;
-            /** Lead Count */
-            lead_count: number;
-            /** Lost */
-            lost: number;
-            /** Never Reached Contact Attempted */
-            never_reached_contact_attempted: number;
-            /**
-             * Unfinished
-             * @description Neither won nor lost
-             */
-            unfinished: number;
-            /**
-             * Unreadable Rows
-             * @description Every row that could not be read, and not kept, with why
-             */
-            unreadable_rows: components["schemas"]["UnreadableRow"][];
-            /** Won */
-            won: number;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
@@ -318,6 +319,10 @@ export interface components {
             crm_stages?: {
                 [key: string]: components["schemas"]["StageOrLost"];
             };
+            /** @description The order both files write dates in */
+            date_order?: components["schemas"]["DateOrder"] | null;
+            /** @description Where a phone written without an international prefix is from */
+            default_country?: components["schemas"]["Country"] | null;
             /**
              * @default {
              *       "inputs": {}
@@ -326,6 +331,12 @@ export interface components {
             leads: components["schemas"]["LeadsColumns"];
             /** @default {} */
             stage_history: components["schemas"]["StageHistoryColumns"];
+            /**
+             * Time Zone
+             * @description The zone of every time written without one
+             * @default UTC
+             */
+            time_zone: string;
             /** Typical Deal Size */
             typical_deal_size?: number | null;
         };
@@ -337,12 +348,27 @@ export interface components {
              */
             confirmed_at: string | null;
             /**
+             * Countries
+             * @description The countries a phone without an international prefix can be from
+             */
+            countries: components["schemas"]["CountryChoice"][];
+            /**
              * Crm Stages
              * @description Every CRM stage name in the column marked as the CRM stage, most used first
              */
             crm_stages: components["schemas"]["CrmStage"][];
-            /** @description What confirming formatted; null in draft */
-            formatting: components["schemas"]["FormattingSummary"] | null;
+            /**
+             * Date Orders
+             * @description The orders dates can be written in
+             */
+            date_orders: components["schemas"]["DateOrderChoice"][];
+            /**
+             * Formatted At
+             * @description When its data was formatted
+             */
+            formatted_at: string | null;
+            /** @description What formatting made of the files */
+            formatting: components["schemas"]["Summary"] | null;
             /**
              * Input Kinds
              * @description How an input column can be read
@@ -369,6 +395,11 @@ export interface components {
              * @description What a CRM stage can be placed on: the Canonical ladder in order, then Lost
              */
             stages_and_lost: components["schemas"]["StageOrLostChoice"][];
+            /**
+             * Still To Do
+             * @description What confirming still has to do, when it was interrupted; confirming again does it. Null in draft and once confirming is done.
+             */
+            still_to_do: string | null;
         };
         /** NewAdvertiser */
         NewAdvertiser: {
@@ -420,21 +451,45 @@ export interface components {
             name: string;
             value: components["schemas"]["StageOrLost"];
         };
-        /** UnreadableRow */
-        UnreadableRow: {
+        /**
+         * Summary
+         * @description What the Formatter made of the two files.
+         */
+        Summary: {
+            /** Lead Count */
+            lead_count: number;
+            /** Lost */
+            lost: number;
+            /**
+             * Neglected
+             * @description Neglected leads: never attempted to contact
+             */
+            neglected: number;
+            /**
+             * No Outcome Yet
+             * @description Leads neither won nor lost yet
+             */
+            no_outcome_yet: number;
+            /** Unreadable */
+            unreadable: components["schemas"]["UnreadableRows"][];
+            /** Won */
+            won: number;
+        };
+        /**
+         * UnreadableRows
+         * @description The rows of one file that could not be read for one reason, and so were not kept.
+         */
+        UnreadableRows: {
+            /** Count */
+            count: number;
             file: components["schemas"]["FileKind"];
             /**
-             * Lead
-             * @description The row's lead identifier, when it has one
+             * First Rows
+             * @description The first 10 of them, by place in the file from 1 below the header
              */
-            lead: string | null;
+            first_rows: number[];
             /** Reason */
             reason: string;
-            /**
-             * Row
-             * @description The row's place in its file, counting from 1 below the header
-             */
-            row: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -804,7 +859,7 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
-            /** @description Not confirmable yet, already confirmed, or a stored file unreadable */
+            /** @description Not confirmable yet, already confirmed, or a file cannot be read */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -822,7 +877,7 @@ export interface operations {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
-            /** @description Not confirmed, or confirmed but the raw uploads not yet deleted */
+            /** @description Not confirmed, or confirmed but the raw files not all deleted yet */
             503: {
                 headers: {
                     [name: string]: unknown;

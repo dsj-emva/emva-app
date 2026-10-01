@@ -3,7 +3,7 @@
 import enum
 import uuid
 from datetime import datetime
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import (
     JSON,
@@ -13,12 +13,15 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     String,
-    Text,
     UniqueConstraint,
+    insert,
 )
-from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column, relationship
 
 from emva_api.ladder import STAGES_AND_LOST
+
+if TYPE_CHECKING:
+    from emva_api.formatter import Formatted
 
 
 class Base(DeclarativeBase):
@@ -78,6 +81,9 @@ class UploadedFile(Base):
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     row_count: Mapped[int]
     column_names: Mapped[list[str]] = mapped_column(JSON)
+    # What each column's values are like (counts and flags, never values), read on upload;
+    # null for a file uploaded before they were kept.
+    column_facts: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     advertiser: Mapped[Advertiser] = relationship(back_populates="files")
 
 
@@ -99,20 +105,21 @@ class AdvertiserMapping(Base):
 
 
 class Lead(Base):
-    """A Lead as the Formatter wrote it: no name, email and phone only as hashes, and only the
-    inputs the Mapping marks."""
+    """A Lead as the Formatter wrote it: no name; its identifier, email and phone only as
+    hashes; and only the inputs the Mapping marks, each kept as its kind."""
 
     __tablename__ = "lead"
-    __table_args__ = (UniqueConstraint("advertiser_id", "identifier"),)
+    __table_args__ = (UniqueConstraint("advertiser_id", "identifier_hash"),)
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
     advertiser_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("advertiser.id"))
-    # The lead's identifier in the advertiser's CRM.
-    identifier: Mapped[str] = mapped_column(Text)
+    # The hash of the lead's identifier in the advertiser's CRM, which is often its email.
+    identifier_hash: Mapped[str] = mapped_column(String(64))
     submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     email_hash: Mapped[str | None] = mapped_column(String(64))
     phone_hash: Mapped[str | None] = mapped_column(String(64))
-    inputs: Mapped[dict[str, Any]] = mapped_column(JSON)
+    number_inputs: Mapped[dict[str, float | None]] = mapped_column(JSON)
+    category_inputs: Mapped[dict[str, str | None]] = mapped_column(JSON)
     stage_events: Mapped[list["LeadStageEvent"]] = relationship(order_by="LeadStageEvent.at")
 
 
@@ -138,5 +145,44 @@ class Formatting(Base):
 
     advertiser_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("advertiser.id"), primary_key=True)
     formatted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
-    # The counts of leads by Outcome, and every unreadable row with its reason.
+    # The Formatter's Summary: counts of leads by Outcome, and the unreadable rows by reason.
     summary: Mapped[dict[str, Any]] = mapped_column(JSON)
+
+
+def keep_formatted(
+    session: Session, advertiser: Advertiser, formatted: "Formatted", at: datetime
+) -> None:
+    """Add the formatted leads, their stage events and the summary, in bulk; the caller commits."""
+    leads: list[dict[str, Any]] = []
+    events: list[dict[str, Any]] = []
+    for lead in formatted.leads:
+        lead_id = uuid.uuid4()
+        leads.append(
+            {
+                "id": lead_id,
+                "advertiser_id": advertiser.id,
+                "identifier_hash": lead.identifier_hash,
+                "submitted_at": lead.submitted_at,
+                "email_hash": lead.email_hash,
+                "phone_hash": lead.phone_hash,
+                "number_inputs": lead.numbers,
+                "category_inputs": lead.categories,
+            }
+        )
+        events += [
+            {
+                "id": uuid.uuid4(),
+                "lead_id": lead_id,
+                "stage": str(event.stage),
+                "at": event.at,
+                "deal_value": event.deal_value,
+            }
+            for event in lead.stage_events
+        ]
+    if leads:
+        session.execute(insert(Lead), leads)
+    if events:
+        session.execute(insert(LeadStageEvent), events)
+    advertiser.formatting = Formatting(
+        formatted_at=at, summary=formatted.summary.model_dump(mode="json")
+    )
