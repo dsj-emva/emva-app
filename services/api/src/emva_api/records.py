@@ -5,8 +5,20 @@ import uuid
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import JSON, DateTime, Enum, ForeignKey, String, UniqueConstraint
+from sqlalchemy import (
+    JSON,
+    DateTime,
+    Enum,
+    Float,
+    ForeignKey,
+    Index,
+    String,
+    Text,
+    UniqueConstraint,
+)
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
+
+from emva_api.ladder import STAGES_AND_LOST
 
 
 class Base(DeclarativeBase):
@@ -42,10 +54,12 @@ class Advertiser(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     files: Mapped[list["UploadedFile"]] = relationship(back_populates="advertiser")
     mapping: Mapped["AdvertiserMapping | None"] = relationship(back_populates="advertiser")
+    formatting: Mapped["Formatting | None"] = relationship()
 
 
 class UploadedFile(Base):
-    """A raw file as uploaded; its content lives in object storage under object_key.
+    """A raw file as uploaded; its content lives in object storage under object_key until it is
+    formatted, then is deleted and object_key cleared.
 
     Only the file's shape is kept here (row count, column names); its values, which hold
     personal data, are read from object storage and never stored in Postgres.
@@ -60,7 +74,7 @@ class UploadedFile(Base):
         Enum(FileKind, name="file_kind", values_callable=_values)
     )
     file_name: Mapped[str] = mapped_column(String(255))
-    object_key: Mapped[str] = mapped_column(String(255))
+    object_key: Mapped[str | None] = mapped_column(String(255))
     uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     row_count: Mapped[int]
     column_names: Mapped[list[str]] = mapped_column(JSON)
@@ -82,3 +96,47 @@ class AdvertiserMapping(Base):
     # names with counts), so a confirmed mapping reads without the raw files.
     confirmed_against: Mapped[dict[str, Any] | None] = mapped_column(JSON)
     advertiser: Mapped[Advertiser] = relationship(back_populates="mapping")
+
+
+class Lead(Base):
+    """A Lead as the Formatter wrote it: no name, email and phone only as hashes, and only the
+    inputs the Mapping marks."""
+
+    __tablename__ = "lead"
+    __table_args__ = (UniqueConstraint("advertiser_id", "identifier"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    advertiser_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("advertiser.id"))
+    # The lead's identifier in the advertiser's CRM.
+    identifier: Mapped[str] = mapped_column(Text)
+    submitted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    email_hash: Mapped[str | None] = mapped_column(String(64))
+    phone_hash: Mapped[str | None] = mapped_column(String(64))
+    inputs: Mapped[dict[str, Any]] = mapped_column(JSON)
+    stage_events: Mapped[list["LeadStageEvent"]] = relationship(order_by="LeadStageEvent.at")
+
+
+class LeadStageEvent(Base):
+    """A lead reaching a Stage of the Canonical ladder, or being lost, at a time."""
+
+    __tablename__ = "stage_event"
+    __table_args__ = (Index("stage_event_lead_id", "lead_id"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    lead_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("lead.id"))
+    stage: Mapped[str] = mapped_column(
+        Enum(*(str(value) for value in STAGES_AND_LOST), name="stage_or_lost")
+    )
+    at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    deal_value: Mapped[float | None] = mapped_column(Float)
+
+
+class Formatting(Base):
+    """What the Formatter made of the advertiser's files, as the screen summarises it."""
+
+    __tablename__ = "formatting"
+
+    advertiser_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("advertiser.id"), primary_key=True)
+    formatted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
+    # The counts of leads by Outcome, and every unreadable row with its reason.
+    summary: Mapped[dict[str, Any]] = mapped_column(JSON)

@@ -1,15 +1,20 @@
 """The Mapping API, for the review screen: the advertiser's Mapping, kept as a draft while the
-person fills it in, then confirmed by them as a separate act. A confirmed Mapping is never changed,
-and is read back from what it was confirmed against, never from the raw files.
+person fills it in, then confirmed by them as a separate act. Confirming runs the Formatter and
+deletes the raw files. A confirmed Mapping is never changed, and is read back from what it was
+confirmed against, never from the raw files.
 """
 
 import uuid
+from dataclasses import asdict
 from datetime import UTC, datetime
 from typing import Any
 
+from botocore.exceptions import BotoCoreError, ClientError
 from fastapi import APIRouter, HTTPException, status
 from pydantic import BaseModel, Field
 from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.orm import Session
 
 from emva_api import mapping, records
 from emva_api.csv_file import count_values
@@ -24,6 +29,7 @@ from emva_api.dependencies import (
     read_stored,
     uploaded_file,
 )
+from emva_api.formatter import Formatted, format_files
 from emva_api.ladder import STAGES_AND_LOST, StageOrLost, name_of
 from emva_api.mapping import (
     INPUT_KINDS,
@@ -84,9 +90,33 @@ class StageOrLostChoice(BaseModel):
     name: str
 
 
+class UnreadableRow(BaseModel):
+    file: FileKind
+    row: int = Field(description="The row's place in its file, counting from 1 below the header")
+    lead: str | None = Field(description="The row's lead identifier, when it has one")
+    reason: str
+
+
+class FormattingSummary(BaseModel):
+    """What the Formatter made of the two files."""
+
+    formatted_at: datetime
+    lead_count: int
+    won: int
+    lost: int
+    unfinished: int = Field(description="Neither won nor lost")
+    never_reached_contact_attempted: int
+    unreadable_rows: list[UnreadableRow] = Field(
+        description="Every row that could not be read, and not kept, with why"
+    )
+
+
 class MappingReview(BaseModel):
     mapping: Mapping
     confirmed_at: datetime | None = Field(description="When a person confirmed it; null in draft")
+    formatting: FormattingSummary | None = Field(
+        description="What confirming formatted; null in draft"
+    )
     problems: list[str] = Field(description="Why it cannot be confirmed yet; empty once it can")
     crm_stages: list[CrmStage] = Field(
         description="Every CRM stage name in the column marked as the CRM stage, most used first"
@@ -111,8 +141,7 @@ def get_mapping(advertiser_id: uuid.UUID, session: SessionDep, store: StoreDep) 
     advertiser = find_advertiser(session, advertiser_id)
     record = advertiser.mapping
     if record is not None and record.confirmed_at is not None:
-        shape = FileShape.model_validate(record.confirmed_against)
-        return _review(Mapping.model_validate(record.content), shape, record.confirmed_at)
+        return _confirmed_review(advertiser, record)
     draft = Mapping.model_validate(record.content) if record else Mapping()
     shape, _ = _shape(advertiser, draft, store, record and record.crm_stages_read)
     return _review(draft, shape, None)
@@ -166,17 +195,27 @@ def save_mapping(
             "model": Problem,
             "description": "Not confirmable yet, already confirmed, or a stored file unreadable",
         },
+        status.HTTP_503_SERVICE_UNAVAILABLE: {
+            "model": Problem,
+            "description": "Not confirmed, or confirmed but the raw uploads not yet deleted",
+        },
     },
 )
 def confirm_mapping(
     advertiser_id: uuid.UUID, session: SessionDep, store: StoreDep, clock: ClockDep
 ) -> MappingReview:
-    """Confirm the saved draft, recording when; refused while it has problems."""
+    """Confirm the saved draft, recording when, and format both files with it in the same
+    operation; refused while it has problems. The formatted data and the confirmation are saved
+    together or not at all; the raw uploads are deleted once they are saved. Confirming again
+    finishes a deletion that failed."""
     # Both rows are held until the commit, so no upload or save lands between the check and it.
     advertiser = find_advertiser(session, advertiser_id, lock=True)
     record = session.get(records.AdvertiserMapping, advertiser.id, with_for_update=True)
     if record is not None and record.confirmed_at is not None:
-        raise HTTPException(status.HTTP_409_CONFLICT, "The mapping is already confirmed.")
+        if not _raw_uploads(advertiser):
+            raise HTTPException(status.HTTP_409_CONFLICT, "The mapping is already confirmed.")
+        _delete_raw_uploads(advertiser, session, store)
+        return _confirmed_review(advertiser, record)
     draft = Mapping.model_validate(record.content) if record else Mapping()
     shape, _ = _shape(advertiser, draft, store, record and record.crm_stages_read)
     try:
@@ -187,11 +226,91 @@ def confirm_mapping(
             f"The mapping cannot be confirmed yet: {' '.join(refused.problems)}",
         ) from refused
     assert record is not None, "an empty draft is never confirmable"
+    formatted = format_files(
+        read_stored(uploaded_file(advertiser, FileKind.LEADS), store),
+        read_stored(uploaded_file(advertiser, FileKind.STAGE_HISTORY), store),
+        confirmed,
+    )
+    _keep(advertiser, formatted, confirmed.confirmed_at, session)
     record.content = confirmed.mapping.model_dump(mode="json")
     record.confirmed_at = confirmed.confirmed_at
     record.confirmed_against = shape.model_dump(mode="json")
-    session.commit()
-    return _review(confirmed.mapping, shape, confirmed.confirmed_at)
+    try:
+        session.commit()
+    except SQLAlchemyError as error:
+        session.rollback()
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "The mapping is not confirmed: the formatted data could not be saved. Try again.",
+        ) from error
+    _delete_raw_uploads(advertiser, session, store)
+    return _confirmed_review(advertiser, record)
+
+
+def _keep(
+    advertiser: records.Advertiser,
+    formatted: Formatted,
+    at: datetime,
+    session: Session,
+) -> None:
+    for lead in formatted.leads:
+        session.add(
+            records.Lead(
+                advertiser_id=advertiser.id,
+                identifier=lead.identifier,
+                submitted_at=lead.submitted_at,
+                email_hash=lead.email_hash,
+                phone_hash=lead.phone_hash,
+                inputs=lead.inputs,
+                stage_events=[
+                    records.LeadStageEvent(
+                        stage=str(event.stage), at=event.at, deal_value=event.deal_value
+                    )
+                    for event in lead.stage_events
+                ],
+            )
+        )
+    summary = {
+        **asdict(formatted.summary()),
+        "unreadable_rows": [asdict(row) for row in formatted.unreadable],
+    }
+    advertiser.formatting = records.Formatting(formatted_at=at, summary=summary)
+
+
+def _raw_uploads(advertiser: records.Advertiser) -> list[records.UploadedFile]:
+    return [file for file in advertiser.files if file.object_key is not None]
+
+
+def _delete_raw_uploads(
+    advertiser: records.Advertiser, session: Session, store: ObjectStore
+) -> None:
+    try:
+        for file in _raw_uploads(advertiser):
+            store.delete(file.object_key)
+            file.object_key = None
+        session.commit()
+    except (BotoCoreError, ClientError, SQLAlchemyError) as error:
+        session.rollback()
+        raise HTTPException(
+            status.HTTP_503_SERVICE_UNAVAILABLE,
+            "The mapping is confirmed and the data formatted, but the raw uploads could not be "
+            "deleted yet. Confirm again to delete them.",
+        ) from error
+
+
+def _confirmed_review(
+    advertiser: records.Advertiser, record: records.AdvertiserMapping
+) -> MappingReview:
+    assert record.confirmed_at is not None and advertiser.formatting is not None
+    formatting = advertiser.formatting
+    return _review(
+        Mapping.model_validate(record.content),
+        FileShape.model_validate(record.confirmed_against),
+        record.confirmed_at,
+        FormattingSummary.model_validate(
+            {**formatting.summary, "formatted_at": formatting.formatted_at.astimezone(UTC)}
+        ),
+    )
 
 
 def _confirmed() -> HTTPException:
@@ -200,10 +319,16 @@ def _confirmed() -> HTTPException:
     )
 
 
-def _review(draft: Mapping, shape: FileShape, confirmed_at: datetime | None) -> MappingReview:
+def _review(
+    draft: Mapping,
+    shape: FileShape,
+    confirmed_at: datetime | None,
+    formatting: FormattingSummary | None = None,
+) -> MappingReview:
     return MappingReview(
         mapping=draft,
         confirmed_at=confirmed_at and confirmed_at.astimezone(UTC),
+        formatting=formatting,
         problems=mapping.problems(draft, shape.files()),
         crm_stages=shape.crm_stages,
         leads_roles=[LeadsRoleChoice(role=r, label=LEADS_ROLES[r].label) for r in LeadsRole],

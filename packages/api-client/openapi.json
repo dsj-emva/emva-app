@@ -170,6 +170,56 @@
         "title": "FileProfile",
         "type": "object"
       },
+      "FormattingSummary": {
+        "description": "What the Formatter made of the two files.",
+        "properties": {
+          "formatted_at": {
+            "format": "date-time",
+            "title": "Formatted At",
+            "type": "string"
+          },
+          "lead_count": {
+            "title": "Lead Count",
+            "type": "integer"
+          },
+          "lost": {
+            "title": "Lost",
+            "type": "integer"
+          },
+          "never_reached_contact_attempted": {
+            "title": "Never Reached Contact Attempted",
+            "type": "integer"
+          },
+          "unfinished": {
+            "description": "Neither won nor lost",
+            "title": "Unfinished",
+            "type": "integer"
+          },
+          "unreadable_rows": {
+            "description": "Every row that could not be read, and not kept, with why",
+            "items": {
+              "$ref": "#/components/schemas/UnreadableRow"
+            },
+            "title": "Unreadable Rows",
+            "type": "array"
+          },
+          "won": {
+            "title": "Won",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "formatted_at",
+          "lead_count",
+          "won",
+          "lost",
+          "unfinished",
+          "never_reached_contact_attempted",
+          "unreadable_rows"
+        ],
+        "title": "FormattingSummary",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -375,6 +425,17 @@
             "title": "Crm Stages",
             "type": "array"
           },
+          "formatting": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FormattingSummary"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What confirming formatted; null in draft"
+          },
           "input_kinds": {
             "description": "How an input column can be read",
             "items": {
@@ -422,6 +483,7 @@
         "required": [
           "mapping",
           "confirmed_at",
+          "formatting",
           "problems",
           "crm_stages",
           "leads_roles",
@@ -582,6 +644,42 @@
           "name"
         ],
         "title": "StageOrLostChoice",
+        "type": "object"
+      },
+      "UnreadableRow": {
+        "properties": {
+          "file": {
+            "$ref": "#/components/schemas/FileKind"
+          },
+          "lead": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The row's lead identifier, when it has one",
+            "title": "Lead"
+          },
+          "reason": {
+            "title": "Reason",
+            "type": "string"
+          },
+          "row": {
+            "description": "The row's place in its file, counting from 1 below the header",
+            "title": "Row",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "file",
+          "row",
+          "lead",
+          "reason"
+        ],
+        "title": "UnreadableRow",
         "type": "object"
       },
       "ValidationError": {
@@ -843,7 +941,7 @@
     },
     "/advertisers/{advertiser_id}/files/{kind}/columns": {
       "get": {
-        "description": "Each column of the file with its first few values, read from the file itself.",
+        "description": "Each column of the file with its first few values, read from the file itself; gone once\nthe file is formatted.",
         "operationId": "getColumns",
         "parameters": [
           {
@@ -899,6 +997,16 @@
               }
             },
             "description": "Stored file unreadable"
+          },
+          "410": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Formatted, and so deleted"
           },
           "422": {
             "content": {
@@ -1046,7 +1154,7 @@
     },
     "/advertisers/{advertiser_id}/mapping/confirmation": {
       "post": {
-        "description": "Confirm the saved draft, recording when; refused while it has problems.",
+        "description": "Confirm the saved draft, recording when, and format both files with it in the same\noperation; refused while it has problems. The formatted data and the confirmation are saved\ntogether or not at all; the raw uploads are deleted once they are saved. Confirming again\nfinishes a deletion that failed.",
         "operationId": "confirmMapping",
         "parameters": [
           {
@@ -1100,6 +1208,16 @@
               }
             },
             "description": "Validation Error"
+          },
+          "503": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not confirmed, or confirmed but the raw uploads not yet deleted"
           }
         },
         "summary": "Confirm Mapping"

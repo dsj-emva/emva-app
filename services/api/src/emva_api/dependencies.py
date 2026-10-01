@@ -65,6 +65,13 @@ def uploaded_file(advertiser: records.Advertiser, kind: FileKind) -> records.Upl
 
 
 def read_stored(file: records.UploadedFile, store: ObjectStore) -> Table:
+    """The raw file; gone once it is formatted."""
+    if file.object_key is None:
+        raise HTTPException(
+            status.HTTP_410_GONE,
+            f"The raw {label(file.kind)} was deleted once it was formatted, so its values are "
+            "gone.",
+        )
     try:
         return read_csv(store.get(file.object_key))
     except UnreadableFile as error:

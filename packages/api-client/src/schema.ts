@@ -62,7 +62,8 @@ export interface paths {
         };
         /**
          * Get Columns
-         * @description Each column of the file with its first few values, read from the file itself.
+         * @description Each column of the file with its first few values, read from the file itself; gone once
+         *     the file is formatted.
          */
         get: operations["getColumns"];
         put?: never;
@@ -108,7 +109,10 @@ export interface paths {
         put?: never;
         /**
          * Confirm Mapping
-         * @description Confirm the saved draft, recording when; refused while it has problems.
+         * @description Confirm the saved draft, recording when, and format both files with it in the same
+         *     operation; refused while it has problems. The formatted data and the confirmation are saved
+         *     together or not at all; the raw uploads are deleted once they are saved. Confirming again
+         *     finishes a deletion that failed.
          */
         post: operations["confirmMapping"];
         delete?: never;
@@ -210,6 +214,35 @@ export interface components {
              */
             uploaded_at: string;
         };
+        /**
+         * FormattingSummary
+         * @description What the Formatter made of the two files.
+         */
+        FormattingSummary: {
+            /**
+             * Formatted At
+             * Format: date-time
+             */
+            formatted_at: string;
+            /** Lead Count */
+            lead_count: number;
+            /** Lost */
+            lost: number;
+            /** Never Reached Contact Attempted */
+            never_reached_contact_attempted: number;
+            /**
+             * Unfinished
+             * @description Neither won nor lost
+             */
+            unfinished: number;
+            /**
+             * Unreadable Rows
+             * @description Every row that could not be read, and not kept, with why
+             */
+            unreadable_rows: components["schemas"]["UnreadableRow"][];
+            /** Won */
+            won: number;
+        };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
@@ -308,6 +341,8 @@ export interface components {
              * @description Every CRM stage name in the column marked as the CRM stage, most used first
              */
             crm_stages: components["schemas"]["CrmStage"][];
+            /** @description What confirming formatted; null in draft */
+            formatting: components["schemas"]["FormattingSummary"] | null;
             /**
              * Input Kinds
              * @description How an input column can be read
@@ -384,6 +419,22 @@ export interface components {
             /** Name */
             name: string;
             value: components["schemas"]["StageOrLost"];
+        };
+        /** UnreadableRow */
+        UnreadableRow: {
+            file: components["schemas"]["FileKind"];
+            /**
+             * Lead
+             * @description The row's lead identifier, when it has one
+             */
+            lead: string | null;
+            /** Reason */
+            reason: string;
+            /**
+             * Row
+             * @description The row's place in its file, counting from 1 below the header
+             */
+            row: number;
         };
         /** ValidationError */
         ValidationError: {
@@ -602,6 +653,15 @@ export interface operations {
                     "application/json": components["schemas"]["Problem"];
                 };
             };
+            /** @description Formatted, and so deleted */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
+                };
+            };
             /** @description Validation Error */
             422: {
                 headers: {
@@ -760,6 +820,15 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description Not confirmed, or confirmed but the raw uploads not yet deleted */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Problem"];
                 };
             };
         };

@@ -182,12 +182,17 @@ def upload_file(
 @router.get(
     "/advertisers/{advertiser_id}/files/{kind}/columns",
     operation_id="getColumns",
-    responses={**NOT_FOUND, **UNREADABLE_STORED_FILE},
+    responses={
+        **NOT_FOUND,
+        **UNREADABLE_STORED_FILE,
+        status.HTTP_410_GONE: {"model": Problem, "description": "Formatted, and so deleted"},
+    },
 )
 def get_columns(
     advertiser_id: uuid.UUID, kind: FileKind, session: SessionDep, store: StoreDep
 ) -> list[Column]:
-    """Each column of the file with its first few values, read from the file itself."""
+    """Each column of the file with its first few values, read from the file itself; gone once
+    the file is formatted."""
     file = uploaded_file(find_advertiser(session, advertiser_id), kind)
     table = read_stored(file, store)
     return [Column(name=column.name, examples=column.examples) for column in profile(table)]
